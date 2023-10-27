@@ -1,19 +1,17 @@
 #include "main.h"
-#include "ina226.h"
 
-static struct {
+const static struct {
     int shuntResistor;  //分流电阻，mΩ
-    int currentLSB;     //电流分辨率，mA
+    int currentLSB;     //电流分辨率，uA
     int calRegister;    //校准寄存器值
-} calTable[] = {
-    {1,2,2560},
-    {2,1,2560},
-    {0,0,0}
+    int currentMAX;     //电流最大值，A
+} CalTab[] = {
+    {1,2000,2560, 64},
+    {1,1000,5120, 32},
+    {2,2000,1280, 64},
+    {2,1000,2560, 32},
+    {10,500,1024, 16},
 };
-static int calIdx = 0;
-
-int mV,mA,mW;
-
 
 void i2c_init(void)
 {
@@ -71,12 +69,15 @@ int ina226_get_voltage(void)
 //获取电流，mA
 int ina226_get_current(void)
 {
-    uint16_t data = 0;
-    ina226_register_read(INA226_REG_CUR, &data);
-    if (data>0xFF00) {
-        return 0;
+    int16_t data = 0;
+    ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
+    if(data<0){
+        if(data>-20){
+            data=0;
+        }
+        data=0-data;
     }
-    return data * calTable[calIdx].currentLSB;
+    return data * CalTab[mvar.cal_idx].currentLSB / 1000;
 }
 
 //获取功率，mW
@@ -84,7 +85,7 @@ int ina226_get_power(void)
 {
     uint16_t data = 0;
     ina226_register_read(INA226_REG_PWR, &data);
-    return data * calTable[calIdx].currentLSB * 25;
+    return data * CalTab[mvar.cal_idx].currentLSB * 25 / 1000;
     return 0;
 }
 
@@ -100,15 +101,16 @@ int ina226_get_id(void)
     return id;
 }
 
-//设置采样电阻，毫欧
-int ina226_set_resistor(int resistor)
+//设置校准值
+int ina226_set_cal(void)
 {
     uint16_t data;
     
-    for (int i=0;calTable[i].shuntResistor;i++){
-        if (calTable[i].shuntResistor == resistor) {
-            data = (uint16_t)calTable[i].calRegister;
-            calIdx = i;
+    for (int i=0;i<ASIZE(CalTab);i++){
+        if (CalTab[i].shuntResistor == mvar.store.res
+            && CalTab[i].currentMAX == mvar.store.range) {
+            data = (uint16_t)CalTab[i].calRegister;
+            mvar.cal_idx = i;
             ina226_register_write(INA226_REG_CAL, data);
             break;
         }
@@ -127,21 +129,26 @@ int ina226_init(void)
     }
 
     ina226_register_write(INA226_REG_CONF, 0x4927); //AGV:128,VBUSCT:1.1ms
-    ina226_set_resistor(1); //1mΩ
+    ina226_set_cal();
 
     return 0;
 }
 
-
 void ina226_task(void *param)
 {
     while (1) {
-        vTaskDelay(100);
         int v=ina226_get_voltage();
         int a=ina226_get_current();
-        int w=ina226_get_power();
-        mV=v;mA=a;mW=w;
-        Printf("v:%dmV a:%dmA w:%dmW\n",v,a,w);
+        mvar.msr.mV=v;
+        mvar.msr.mA=a;
+        mvar.msr.mW=mvar.msr.mV*mvar.msr.mA/1000;
+        if(mvar.msr.mA>mvar.msr.max_mA){
+            mvar.msr.max_mA=mvar.msr.mA;
+        }
+        if(mvar.msr.mW>mvar.msr.max_mW){
+            mvar.msr.max_mW=mvar.msr.mW;
+        }
+        vTaskDelay(50);
     }
 }
 

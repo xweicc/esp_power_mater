@@ -1,11 +1,20 @@
 #include "main.h"
-#include "buzzer.h"
-
-static int buzzerState;
 
 void buzzer_set(int state)
 {
-    buzzerState=state;
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 12*mvar.store.voice));
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    if(state==buzzerShort){
+        mod_timer(&mvar.buzzer.timer, jiffies+20);
+    }else if(state==buzzerLong){
+        mod_timer(&mvar.buzzer.timer, jiffies+200);
+    }
+}
+
+void buzzer_timer_fun(unsigned long data)
+{
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 }
 
 void buzzer_init(void)
@@ -31,21 +40,8 @@ void buzzer_init(void)
         .hpoint         = 0
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+
+    setup_timer(&mvar.buzzer.timer, buzzer_timer_fun, 0);
 }
 
-void buzzer_task(void *param)
-{
-    while(1){
-        if (buzzerState == BUZZER_ON) {
-            ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 100));
-            ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
-            buzzerState = BUZZER_IDLE;
-        } else if (buzzerState == BUZZER_OFF) {
-            ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
-            ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
-            buzzerState = BUZZER_IDLE;
-        }
-        vTaskDelay(10);
-    }
-}
 

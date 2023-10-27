@@ -14,5 +14,6 @@
 
 int ina226_init(void);
 void ina226_task(void *param);
+int ina226_set_cal(void);
 
 #endif
