@@ -37,6 +37,8 @@ typedef void(*view_show)(void);
 typedef void(*menu_fun)(void);
 
 typedef struct {
+    int raw_mV;
+    int raw_mA;
     int mV;
     int mA;
     int mW;
@@ -59,6 +61,16 @@ typedef struct {
     int range;
 } store_t;
 
+typedef struct {
+    struct {
+        int raw;
+        float val;
+    } volt[4];  //5V 10V 15V 20V
+    struct {
+        int raw;
+        float val;
+    } curt[6];  //1A 2A 5A 10A 20A 50A
+} calibration_t;
 
 typedef struct {
     float temp;
@@ -66,10 +78,12 @@ typedef struct {
     int menuIdx;
     int main_idx;
     int disp_dir;
+    int timeDiv;
     int seting;
     int set_idx;
     int cal_idx;
     store_t store;
+    calibration_t cal;
     int cal_point;
     view_show view;
     measure_t msr;

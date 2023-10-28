@@ -134,13 +134,87 @@ int ina226_init(void)
     return 0;
 }
 
+static inline int cal_volt_raw(int i)
+{
+    if(!mvar.cal.volt[i].raw){
+        return volt_cal_point[i];
+    }else{
+        return mvar.cal.volt[i].raw;
+    }
+}
+
+static inline int cal_curt_raw(int i)
+{
+    if(!mvar.cal.curt[i].raw){
+        return curt_cal_point[i];
+    }else{
+        return mvar.cal.curt[i].raw;
+    }
+}
+
+
+int get_cal_volt(int mV)
+{
+    int a=0,b=0;
+    for(int i=0;i<ASIZE(mvar.cal.volt);i++){
+        if(mV<cal_volt_raw(i)){
+            b=i;
+            break;
+        }
+        a=i;
+        b=i;
+    }
+    if(mvar.cal.volt[a].val==mvar.cal.volt[b].val){
+        return mV*mvar.cal.volt[a].val;
+    }else{
+        if(!mvar.cal.volt[a].raw){
+            return mV*mvar.cal.volt[b].val;
+        }else if(!mvar.cal.volt[b].raw){
+            return mV*mvar.cal.volt[a].val;
+        }else{
+            float cal=(mvar.cal.volt[b].val-mvar.cal.volt[a].val)*(mV-cal_volt_raw(a))/(cal_volt_raw(b)-cal_volt_raw(a));
+            cal=mvar.cal.volt[a].val+cal;
+            return mV*cal;
+        }
+    }
+}
+
+int get_cal_curt(int mA)
+{
+    int a=0,b=0;
+    for(int i=0;i<ASIZE(mvar.cal.curt);i++){
+        if(mA<cal_curt_raw(i)){
+            b=i;
+            break;
+        }
+        a=i;
+        b=i;
+    }
+    if(mvar.cal.curt[a].val==mvar.cal.curt[b].val){
+        return mA*mvar.cal.curt[a].val;
+    }else{
+        if(!mvar.cal.curt[a].raw){
+            return mA*mvar.cal.curt[b].val;
+        }else if(!mvar.cal.curt[b].raw){
+            return mA*mvar.cal.curt[a].val;
+        }else{
+            float cal=(mvar.cal.curt[b].val-mvar.cal.curt[a].val)*(mA-cal_curt_raw(a))/(cal_curt_raw(b)-cal_curt_raw(a));
+            cal=mvar.cal.curt[a].val+cal;
+            return mA*cal;
+        }
+    }
+}
+
+
 void ina226_task(void *param)
 {
     while (1) {
         int v=ina226_get_voltage();
         int a=ina226_get_current();
-        mvar.msr.mV=v;
-        mvar.msr.mA=a;
+        mvar.msr.raw_mV=v;
+        mvar.msr.raw_mA=a;
+        mvar.msr.mV=get_cal_volt(v);
+        mvar.msr.mA=get_cal_curt(a);
         mvar.msr.mW=mvar.msr.mV*mvar.msr.mA/1000;
         if(mvar.msr.mA>mvar.msr.max_mA){
             mvar.msr.max_mA=mvar.msr.mA;

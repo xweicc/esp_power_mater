@@ -156,6 +156,153 @@ void view_show_main2(void)
     oled_show_string(42, 0, voltage_str(), FontSize_12x24);
 }
 
+
+//量程范围定义
+const static struct {
+    int max;    //最大量程
+    int div;    //每格值
+    int base;   //基数
+} rangeTab [] = {
+    {50,10,1},
+    {100,20,1},
+    {250,50,1},
+    {500,100,1},
+    {1000,200,1},
+    {2000,400,1},
+    {5,1,1000},
+    {10,2,1000},
+    {15,3,1000},
+    {20,4,1000},
+    {25,5,1000},
+    {30,6,1000},
+    {35,7,1000},
+    {40,8,1000},
+    {45,9,1000},
+    {50,10,1000},
+    {60,12,1000},
+    {70,14,1000}
+};
+
+int timeDivList[] = {1,5,10,60,120};
+
+#define xDivNum 26   //X轴格数
+#define yDivNum 40   //Y轴格数
+
+void curt_curve_show(void)
+{
+    int i;
+    int div=timeDivList[mvar.timeDiv];
+    char S[32]={0};
+    
+    oled_clear();
+    //X轴
+    oled_draw_line(21, 51, 127, 51);
+    oled_draw_line(124, 49, 127, 51);
+    oled_draw_line(124, 53, 127, 51);
+
+    //Y轴
+    oled_draw_line(21, 0, 21, 51);
+    oled_draw_line(21, 0, 19, 3);
+    oled_draw_line(21, 0, 23, 3);
+
+    //X坐标
+    for(int i=21;i<124;i+=4){
+        oled_draw_line(i, 52, i, 53);
+    }
+    int div_t,all_t,all;
+    char *div_u,*all_u;
+    if(div<60){
+        div_t=div;
+        div_u="s";
+    }else{
+        div_t=div/60;
+        div_u="m";
+    }
+    all=div*xDivNum;
+    if(all<60){
+        all_t=all;
+        all_u="s";
+    }else{
+        all_t=all/60;
+        all_u="m";
+    }
+    int len=snprintf(S,sizeof(S),"%d%s/div t:%d%s",div_t,div_u,all_t,all_u);
+    
+    oled_show_string(127-len*6, 56, S, FontSize_6x8);
+    
+    int n=0;
+    int rid=0;
+    int max=0,min=-1;
+    int start;
+    if(mvar.history.len>xDivNum*div){
+        start=mvar.history.len-xDivNum*div;
+    }else{
+        start=mvar.history.len-mvar.history.len/div*div;
+    }
+
+    for(int i=start;i<mvar.history.len;i+=div){
+        int val=0;
+        for(int j=0;j<div;j++){
+            val+=mvar.history.list[i+j];
+        }
+        val/=div;
+        if(val>max){
+            max=val;
+        }
+        if(min==-1 || val<min){
+            min=val;
+        }
+    }
+
+    //量程
+    for(int i=0;i<ASIZE(rangeTab);i++){
+        if((rangeTab[i].max*rangeTab[i].base)>max){
+            rid=i;
+            break;
+        }
+    }
+    
+    //显示最大最小值
+    len=snprintf(S,sizeof(S),"%s",current_str(max));
+    oled_show_char_extend(37, 0, 1);
+    oled_show_string(43, 0, S, FontSize_6x8);
+    oled_show_char_extend(49+len*6, 0, 2);
+    snprintf(S,sizeof(S),"%s",current_str(min));
+    oled_show_string(55+len*6, 0, S, FontSize_6x8);
+    
+    //Y坐标
+    for(int i=51;i>0 && n<=5;i-=8,n++){
+        oled_draw_line(19, i, 20, i);
+        if(rangeTab[rid].max>=1000){
+            snprintf(S,sizeof(S),"%.1f",(double)(rangeTab[rid].div*n)/1000);
+        }else{
+            snprintf(S,sizeof(S),"%3d",rangeTab[rid].div*n);
+        }
+        oled_show_string(0, i-4, S, FontSize_6x8);
+    }
+    snprintf(S,sizeof(S),"%3s",(rangeTab[rid].base==1 && rangeTab[rid].max<1000)?"mA":"A");
+    oled_show_string(0, 55, S, FontSize_6x8);
+
+    int last=0;
+    for(i=start,n=0;i<mvar.history.len && n<xDivNum;i+=div,n++){
+        int val=0;
+        for(int j=0;j<div;j++){
+            val+=mvar.history.list[i+j];
+        }
+        val/=div;
+        val=yDivNum-(val*yDivNum/(rangeTab[rid].max*rangeTab[rid].base));
+        val+=11;
+        if(n==0){
+            last=val;
+            continue;
+        }else{
+            oled_draw_line(21+(n-1)*4, last, 21+n*4, val);
+            last=val;
+        }
+    }
+}
+
+
 void show_alert(void)
 {
     char *type=NULL;
@@ -174,7 +321,8 @@ void show_alert(void)
     }
 
     if(mvar.view!=view_show_main
-        && mvar.view!=view_show_main2){
+        && mvar.view!=view_show_main2
+        && mvar.view!=curt_curve_show){
         return ;
     }
     
@@ -483,19 +631,149 @@ void def_set(void)
     mvar.view=view_show_menu;
 }
 
+const int volt_cal_point[]={5000,10000,15000,20000};    //mV
+const int curt_cal_point[]={1000,2000,5000,10000,20000,50000};  //mA
+
+void volt_cal(void)
+{
+    char S[32]={0};
+    
+    oled_clear();
+    
+    oled_show_text(20, 10, "cal_dot");
+    snprintf(S,sizeof(S),"<%dV>",volt_cal_point[mvar.cal_point]/1000);
+    oled_show_string(76, 10, S, FontSize_8x16);
+    
+    oled_show_text(20, 30, "voltage");
+    oled_show_string(60, 30, voltage_str(), FontSize_8x16);
+
+    float cal=mvar.cal.volt[mvar.cal_point].val;
+    if(cal>1.0){
+        snprintf(S,sizeof(S),"+%f",cal-1.0);
+    }else{
+        snprintf(S,sizeof(S),"-%f",1.0-cal);
+    }
+    oled_show_string(40, 50, S, FontSize_6x8);
+}
+
+
+void curt_cal(void)
+{
+    char S[32]={0};
+    
+    oled_clear();
+    
+    oled_show_text(20, 10, "cal_dot");
+    snprintf(S,sizeof(S),"<%dA>",curt_cal_point[mvar.cal_point]/1000);
+    oled_show_string(76, 10, S, FontSize_8x16);
+    
+    oled_show_text(20, 30, "current");
+    oled_show_string(60, 30, current_str(mvar.msr.mA), FontSize_8x16);
+
+    float cal=mvar.cal.curt[mvar.cal_point].val;
+    if(cal>1.0){
+        snprintf(S,sizeof(S),"+%f",cal-1.0);
+    }else{
+        snprintf(S,sizeof(S),"-%f",1.0-cal);
+    }
+    oled_show_string(40, 50, S, FontSize_6x8);
+}
+
 static struct {
     char *name;
     menu_fun fun;
 }menus[]={
+    {"curt_curve",curt_curve_show},
     {"low_volt",low_volt_set},
     {"over_curt",over_curt_set},
     {"over_temp",over_temp_set},
     {"range_set",range_set},
     {"voice_set",voice_set},
+    {"curt_cal",curt_cal},
+    {"volt_cal",volt_cal},
     {"def_set",def_set},
 };
 
 
+void key_fun_volt_cal(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.cal_point>0){
+                mvar.cal_point--;
+            }
+            break;
+        case keyRightShort:
+            if(mvar.cal_point<ASIZE(mvar.cal.volt)-1){
+                mvar.cal_point++;
+            }
+            break;
+        case keySetShort:
+            float cal=(float)volt_cal_point[mvar.cal_point]/(float)mvar.msr.raw_mV;
+            if(cal>0.8 && cal<1.2){
+                mvar.cal.volt[mvar.cal_point].raw=mvar.msr.raw_mV;
+                mvar.cal.volt[mvar.cal_point].val=cal;
+            }
+            break;
+        case keySetLong:
+            save();
+            mvar.view=view_show_menu;
+            break;
+        default :
+            break;
+    }
+}
+
+void key_fun_curt_cal(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.cal_point>0){
+                mvar.cal_point--;
+            }
+            break;
+        case keyRightShort:
+            if(mvar.cal_point<ASIZE(mvar.cal.curt)-1){
+                mvar.cal_point++;
+            }
+            break;
+        case keySetShort:
+            float cal=(float)curt_cal_point[mvar.cal_point]/(float)mvar.msr.raw_mA;
+            if(cal>0.6 && cal<1.4){
+                mvar.cal.curt[mvar.cal_point].raw=mvar.msr.raw_mA;
+                mvar.cal.curt[mvar.cal_point].val=cal;
+            }
+            break;
+        case keySetLong:
+            save();
+            mvar.view=view_show_menu;
+            break;
+        default :
+            break;
+    }
+}
+
+void key_fun_curt_curve(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.timeDiv>0){
+                mvar.timeDiv--;
+            }
+            break;
+        case keyRightShort:
+            if(mvar.timeDiv<ASIZE(timeDivList)-1){
+                mvar.timeDiv++;
+            }
+            break;
+        case keySetShort:
+        case keySetLong:
+            mvar.view=view_show_menu;
+            break;
+        default :
+            break;
+    }
+}
 
 void view_show_menu(void)
 {
@@ -579,6 +857,8 @@ void key_handler_fun(int event)
         return key_fun_main(event);
     }else if(mvar.view==view_show_menu){
         return key_fun_menu(event);
+    }else if(mvar.view==curt_curve_show){
+        return key_fun_curt_curve(event);
     }else if(mvar.view==low_volt_set){
         return key_fun_low_volt(event);
     }else if(mvar.view==over_curt_set){
@@ -589,6 +869,10 @@ void key_handler_fun(int event)
         return key_fun_voice_set(event);
     }else if(mvar.view==range_set){
         return key_fun_range_set(event);
+    }else if(mvar.view==volt_cal){
+        return key_fun_volt_cal(event);
+    }else if(mvar.view==curt_cal){
+        return key_fun_curt_cal(event);
     }
 }
 
@@ -651,6 +935,7 @@ out:
 void save(void)
 {
     nvram_set_data("store", &mvar.store, sizeof(mvar.store));
+    nvram_set_data("cal", &mvar.cal, sizeof(mvar.cal));
 }
 
 void app_main(void)
@@ -667,6 +952,17 @@ void app_main(void)
         || size!=sizeof(mvar.store)){
         Printf("set defaults\n");
         mvar.store=defaults;
+    }
+
+    size=sizeof(mvar.cal);
+    if(nvram_get_data("cal", &mvar.cal, &size)!=ESP_OK
+        || size!=sizeof(mvar.cal)){
+        for(int i=0;i<ASIZE(mvar.cal.volt);i++){
+            mvar.cal.volt[i].val=1.0;
+        }
+        for(int i=0;i<ASIZE(mvar.cal.curt);i++){
+            mvar.cal.curt[i].val=1.0;
+        }
     }
     
     init_timers_cpu();
