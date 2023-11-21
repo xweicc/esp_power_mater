@@ -79,7 +79,7 @@ char *elec_str2(char *unit)
     static char S[16]={0};
     char W[16]={0};
     if(mvar.msr.mWH>=100000){
-        snprintf(W,sizeof(W),"%.1f",(double)mvar.msr.mW/1000);
+        snprintf(W,sizeof(W),"%.1f",(double)mvar.msr.mWH/1000);
         sprintf(unit,"%5s","WH");
     } else if(mvar.msr.mWH>=1000){
         snprintf(W,sizeof(W),"%.2f",(double)mvar.msr.mWH/1000);
@@ -348,7 +348,7 @@ void elec_timer_fun(unsigned long data)
 {
     static int mW=0;
     mW+=mvar.msr.mW;
-    if(mW>3600){
+    if(mW>=3600){
         mvar.msr.mWH+=mW/3600;
         mW%=3600;
     }

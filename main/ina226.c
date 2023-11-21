@@ -72,7 +72,7 @@ int ina226_get_current(void)
     int16_t data = 0;
     ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
     if(data<0){
-        if(data>-20){
+        if(data>-50){
             data=0;
         }
         data=0-data;
