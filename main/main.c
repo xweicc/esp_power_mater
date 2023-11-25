@@ -10,6 +10,8 @@ store_t defaults={
     .voice=5,
     .res=2,
     .range=32,
+    .main=0,
+    .rotate=0,
 };
 
 char *time_str(void)
@@ -92,6 +94,7 @@ char *elec_str2(char *unit)
     return S;
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
 char *temp_str(void)
 {
     static char S[16]={0};
@@ -100,6 +103,7 @@ char *temp_str(void)
     snprintf(S,sizeof(S),"%5s",V);
     return S;
 }
+#endif
 
 void show_box(int x1, int y1, int x2, int y2)
 {
@@ -119,27 +123,55 @@ void show_box(int x1, int y1, int x2, int y2)
     }
 }
 
+char *resistor_str(void)
+{
+    static char S[16]={0};
+    char str[16]={0};
+    int R=mvar.msr.mV*1000/mvar.msr.mA;
+    
+    if(R<1000){
+        snprintf(str,sizeof(str),"%dm",R);
+    }else if(R<10000){
+        snprintf(str,sizeof(str),"%.2f",(double)R/1000);
+    }else if(R<100000){
+        snprintf(str,sizeof(str),"%.1f",(double)R/1000);
+    }else if(R<1000000){
+        snprintf(str,sizeof(str),"%d",R/1000);
+    }else if(R<10000000){
+        snprintf(str,sizeof(str),"%.1fK",(double)R/1000000);
+    }else if(R<1000000000){
+        snprintf(str,sizeof(str),"%dK",R/1000000);
+    }
+    snprintf(S,sizeof(S),"%4s",str);
+    return S;
+}
+
 void view_show_main(void)
 {
     oled_clear();
     oled_show_string(0, 0, voltage_str(), FontSize_16x32);
     oled_show_string(0, 32, current_str(mvar.msr.mA), FontSize_16x32);
-    oled_draw_line(96, 0, 96, 63);
+    oled_draw_dot_line(96, 0, 96, 63);
 
     oled_show_string(97, 1, time_str(), FontSize_6x8);
-    oled_draw_line(97, 10, 127, 10);
+    oled_draw_dot_line(97, 10, 127, 10);
 
     char unit[8];
     oled_show_string(97, 12, power_str2(unit), FontSize_6x8);
     oled_show_string(97, 20, unit, FontSize_6x8);
-    oled_draw_line(97, 30, 127, 30);
+    oled_draw_dot_line(97, 30, 127, 30);
 
     oled_show_string(97, 33, elec_str2(unit), FontSize_6x8);
     oled_show_string(97, 41, unit, FontSize_6x8);
-    oled_draw_line(97, 51, 127, 51);
+    oled_draw_dot_line(97, 51, 127, 51);
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
     oled_show_string(97, 55, temp_str(), FontSize_6x8);
     oled_show_char_extend(115, 55, 0);
+#else
+    oled_show_string(97, 55, resistor_str(), FontSize_6x8);
+    oled_show_char_extend(121, 55, 4);
+#endif
 }
 
 void view_show_main2(void)
@@ -360,6 +392,7 @@ void elec_timer_fun(unsigned long data)
     mod_timer(&mvar.elec_timer, jiffies+HZ);
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
 void temp_timer_fun(unsigned long data)
 {
     temperature_sensor_get_celsius(mvar.temp_handle, &mvar.temp);
@@ -376,6 +409,7 @@ void temp_init(void)
     setup_timer(&mvar.temp_timer, temp_timer_fun, 0);
     mod_timer(&mvar.temp_timer, jiffies+HZ);
 }
+#endif
 
 void low_volt_set(void)
 {
@@ -494,6 +528,7 @@ void key_fun_over_curt(int event)
     }
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
 void key_fun_over_temp(int event)
 {
     switch(event){
@@ -516,7 +551,7 @@ void key_fun_over_temp(int event)
             break;
     }
 }
-
+#endif
 
 void key_fun_voice_set(int event)
 {
@@ -599,7 +634,7 @@ void over_curt_set(void)
     oled_draw_line(40+x*8, 41, 40+x*8+7, 41);
 }
 
-
+#ifdef CONFIG_IDF_TARGET_ESP32C3
 void over_temp_set(void)
 {
     char S[32]={0};
@@ -609,7 +644,7 @@ void over_temp_set(void)
     snprintf(S,sizeof(S),"[ %d ]",mvar.store.over_temp);
     oled_show_string(48, 26, S, FontSize_8x16);
 }
-
+#endif
 
 void range_set(void)
 {
@@ -679,6 +714,19 @@ void curt_cal(void)
     oled_show_string(40, 50, S, FontSize_6x8);
 }
 
+void zero_cal(void)
+{
+    char S[32]={0};
+    
+    oled_clear();
+
+    oled_show_text(32, 8, "zero_cal");
+    snprintf(S,sizeof(S),"<%d>",mvar.cal.zero);
+    oled_show_string(48, 26, S, FontSize_8x16);
+    oled_show_string(48, 42, current_str(mvar.msr.raw_mA), FontSize_8x16);
+}
+
+
 static struct {
     char *name;
     menu_fun fun;
@@ -686,11 +734,14 @@ static struct {
     {"curt_curve",curt_curve_show},
     {"low_volt",low_volt_set},
     {"over_curt",over_curt_set},
+#ifdef CONFIG_IDF_TARGET_ESP32C3
     {"over_temp",over_temp_set},
     {"range_set",range_set},
+#endif
     {"voice_set",voice_set},
     {"curt_cal",curt_cal},
     {"volt_cal",volt_cal},
+    {"zero_cal",zero_cal},
     {"def_set",def_set},
 };
 
@@ -716,7 +767,7 @@ void key_fun_volt_cal(int event)
             }
             break;
         case keySetLong:
-            save();
+            save_cal();
             mvar.view=view_show_menu;
             break;
         default :
@@ -745,13 +796,37 @@ void key_fun_curt_cal(int event)
             }
             break;
         case keySetLong:
-            save();
+            save_cal();
             mvar.view=view_show_menu;
             break;
         default :
             break;
     }
 }
+
+void key_fun_zero_cal(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.cal.zero>-50){
+                mvar.cal.zero--;
+            }
+            break;
+        case keyRightShort:
+            if(mvar.cal.zero<50){
+                mvar.cal.zero++;
+            }
+            break;
+        case keySetShort:
+        case keySetLong:
+            save_cal();
+            mvar.view=view_show_menu;
+            break;
+        default :
+            break;
+    }
+}
+
 
 void key_fun_curt_curve(int event)
 {
@@ -829,16 +904,18 @@ void key_fun_main(int event)
 {
     switch(event){
         case keyLeftShort:
-            if(mvar.main_idx<ASIZE(main_views)-1){
-                mvar.main_idx++;
+            if(mvar.store.main<ASIZE(main_views)-1){
+                mvar.store.main++;
             }else{
-                mvar.main_idx=0;
+                mvar.store.main=0;
             }
-            mvar.view=main_views[mvar.main_idx];
+            mvar.view=main_views[mvar.store.main];
+            save();
             break;
         case keyRightShort:
-            mvar.disp_dir=!mvar.disp_dir;
-            oled_display_rotate(mvar.disp_dir);
+            mvar.store.rotate=!mvar.store.rotate;
+            oled_display_rotate(mvar.store.rotate);
+            save();
             break;
         case keySetShort:
             mvar.menuIdx=0;
@@ -863,9 +940,13 @@ void key_handler_fun(int event)
         return key_fun_low_volt(event);
     }else if(mvar.view==over_curt_set){
         return key_fun_over_curt(event);
-    }else if(mvar.view==over_temp_set){
+    }
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    else if(mvar.view==over_temp_set){
         return key_fun_over_temp(event);
-    }else if(mvar.view==voice_set){
+    }
+#endif
+    else if(mvar.view==voice_set){
         return key_fun_voice_set(event);
     }else if(mvar.view==range_set){
         return key_fun_range_set(event);
@@ -873,6 +954,8 @@ void key_handler_fun(int event)
         return key_fun_volt_cal(event);
     }else if(mvar.view==curt_cal){
         return key_fun_curt_cal(event);
+    }else if(mvar.view==zero_cal){
+        return key_fun_zero_cal(event);
     }
 }
 
@@ -935,8 +1018,13 @@ out:
 void save(void)
 {
     nvram_set_data("store", &mvar.store, sizeof(mvar.store));
+}
+
+void save_cal(void)
+{
     nvram_set_data("cal", &mvar.cal, sizeof(mvar.cal));
 }
+
 
 void app_main(void)
 {
@@ -967,16 +1055,25 @@ void app_main(void)
     
     init_timers_cpu();
     key_init();
+#ifdef CONFIG_IDF_TARGET_ESP32C3
     temp_init();
+#endif
 
     buzzer_init();
     buzzer_set(buzzerShort);
     
     ina226_init();
-	xTaskCreate(ina226_task, "ina226_task", 2048, NULL, 5, NULL);
-
     oled_init();
+    
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+	xTaskCreate(ina226_task, "ina226_task", 2048, NULL, 5, NULL);
 	xTaskCreate(oled_task, "oled_task", 2048, NULL, 3, NULL);
+#else
+    setup_timer(&mvar.ina226_timer, ina226_timer_fun, 0);
+    mod_timer(&mvar.ina226_timer, jiffies+50);
+    setup_timer(&mvar.oled_timer, oled_timer_fun, 0);
+    mod_timer(&mvar.oled_timer, jiffies+50);
+#endif
 
     key_register_fun(keyNumSet, key_handler_fun);
     key_register_fun(keyNumLeft, key_handler_fun);

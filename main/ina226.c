@@ -33,7 +33,7 @@ static esp_err_t ina226_register_read(uint8_t reg_addr, uint16_t *data)
 {
     uint8_t buf[2] = {0};
     
-    esp_err_t ret = i2c_master_write_read_device(0, INA226_ADDR, &reg_addr, 1, buf, 2, 100);
+    esp_err_t ret = i2c_master_write_read_device(0, INA226_ADDR, &reg_addr, 1, buf, 2, 10);
     if (ret != ESP_OK) {
         Printf("read %02X failed\n",reg_addr);
         return ret;
@@ -48,7 +48,7 @@ static esp_err_t ina226_register_write(uint8_t reg_addr, uint16_t data)
 {
     uint8_t write_buf[3] = {reg_addr, data>>8, data&0xFF};
 
-    esp_err_t ret = i2c_master_write_to_device(0, INA226_ADDR, write_buf, sizeof(write_buf), 100);
+    esp_err_t ret = i2c_master_write_to_device(0, INA226_ADDR, write_buf, sizeof(write_buf), 10);
     if (ret != ESP_OK) {
         Printf("write %02X failed\n",reg_addr);
         return ret;
@@ -71,10 +71,8 @@ int ina226_get_current(void)
 {
     int16_t data = 0;
     ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
+    data+=mvar.cal.zero;
     if(data<0){
-        if(data>-50){
-            data=0;
-        }
         data=0-data;
     }
     return data * CalTab[mvar.cal_idx].currentLSB / 1000;
@@ -205,23 +203,34 @@ int get_cal_curt(int mA)
     }
 }
 
+void ina226_run(void)
+{
+    int v=ina226_get_voltage();
+    int a=ina226_get_current();
+    mvar.msr.raw_mV=v;
+    mvar.msr.raw_mA=a;
+    mvar.msr.mV=get_cal_volt(v);
+    mvar.msr.mA=get_cal_curt(a);
+    mvar.msr.mW=mvar.msr.mV*mvar.msr.mA/1000;
+    if(mvar.msr.mA>mvar.msr.max_mA){
+        mvar.msr.max_mA=mvar.msr.mA;
+    }
+    if(mvar.msr.mW>mvar.msr.max_mW){
+        mvar.msr.max_mW=mvar.msr.mW;
+    }
+}
+
+void ina226_timer_fun(unsigned long data)
+{
+    ina226_run();
+    mod_timer(&mvar.ina226_timer, jiffies+50);
+}
+
 
 void ina226_task(void *param)
 {
     while (1) {
-        int v=ina226_get_voltage();
-        int a=ina226_get_current();
-        mvar.msr.raw_mV=v;
-        mvar.msr.raw_mA=a;
-        mvar.msr.mV=get_cal_volt(v);
-        mvar.msr.mA=get_cal_curt(a);
-        mvar.msr.mW=mvar.msr.mV*mvar.msr.mA/1000;
-        if(mvar.msr.mA>mvar.msr.max_mA){
-            mvar.msr.max_mA=mvar.msr.mA;
-        }
-        if(mvar.msr.mW>mvar.msr.max_mW){
-            mvar.msr.max_mW=mvar.msr.mW;
-        }
+        ina226_run();
         vTaskDelay(50);
     }
 }

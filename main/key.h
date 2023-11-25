@@ -5,11 +5,19 @@
 #define keyCheckTime 10     //检测间隔
 #define keyLongTime 500    //长按时间
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
 enum{
     keyIoSet=18,
     keyIoLeft=3,
     keyIoRight=9,
 };
+#else
+enum{
+    keyIoSet=9,
+    keyIoLeft=3,
+    keyIoRight=8,
+};
+#endif
 
 enum{
     keyNumSet,

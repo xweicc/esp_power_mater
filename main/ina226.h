@@ -14,6 +14,7 @@
 
 int ina226_init(void);
 void ina226_task(void *param);
+void ina226_timer_fun(unsigned long data);
 int ina226_set_cal(void);
 
 #endif

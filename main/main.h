@@ -17,6 +17,7 @@
 #include <esp_system.h>
 #include <lwip/sys.h>
 #include <driver/temperature_sensor.h>
+#include <freertos/portmacro.h>
 
 #include "llist.h"
 #include "timer.h"
@@ -59,6 +60,8 @@ typedef struct {
     int voice;
     int res;
     int range;
+    int main;
+    int rotate;
 } store_t;
 
 typedef struct {
@@ -70,6 +73,8 @@ typedef struct {
         int raw;
         float val;
     } curt[6];  //1A 2A 5A 10A 20A 50A
+    int zero;
+    char reserved[32];
 } calibration_t;
 
 typedef struct {
@@ -77,7 +82,6 @@ typedef struct {
     int menuStart;
     int menuIdx;
     int main_idx;
-    int disp_dir;
     int timeDiv;
     int seting;
     int set_idx;
@@ -95,6 +99,8 @@ typedef struct {
     struct timer_list key_timer;
     struct timer_list show_timer;
     struct timer_list elec_timer;
+    struct timer_list ina226_timer;
+    struct timer_list oled_timer;
 } meter_var_t;
 
 extern meter_var_t mvar;
@@ -104,6 +110,7 @@ extern const int curt_cal_point[];
 void view_show_menu(void);
 void show_alert(void);
 void save(void);
+void save_cal(void);
 
 #endif
 
