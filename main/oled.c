@@ -339,6 +339,11 @@ void oled_display_rotate(int dir)
     oled->rotate(dir);
 }
 
+void oled_contrast(int i)
+{
+    oled->contrast(i);
+}
+
 int oled_init(void)
 {
 #ifdef CONFIG_IDF_TARGET_ESP32C3
@@ -355,7 +360,8 @@ int oled_init(void)
         return -1;
     }
 
-    oled->rotate(0);
+    oled->rotate(mvar.store.rotate);
+    oled->contrast(mvar.store.contrast);
     
     return 0;
 }

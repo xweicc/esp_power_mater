@@ -95,14 +95,26 @@ void ssd1312_flush(void)
 }
 
 //屏幕旋转180度
-void ssd1312_rotate(int i)
+void ssd1312_rotate(int rotate)
 {
-    if(i==1){
+    if(rotate==1){
         ssd1312_write_cmd(0xA0);
         ssd1312_write_cmd(0xC8);
 	}else{
         ssd1312_write_cmd(0xA1);
         ssd1312_write_cmd(0xC0);
+    }
+}
+
+void ssd1312_contrast(int contrast)
+{
+    ssd1312_write_cmd(0x81);
+    if(contrast==contrastLow){
+        ssd1312_write_cmd(0x01);
+    }else if(contrast==contrastMid){
+        ssd1312_write_cmd(0x10);
+    }else if(contrast==contrastHigh){
+        ssd1312_write_cmd(0x7F);
     }
 }
 
@@ -113,6 +125,7 @@ oled_driver_t *ssd1312_new(void)
         oled->init=ssd1312_init;
         oled->flush=ssd1312_flush;
         oled->rotate=ssd1312_rotate;
+        oled->contrast=ssd1312_contrast;
     }
 
     return oled;

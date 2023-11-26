@@ -144,16 +144,29 @@ void ch1115_flush(void)
 
 
 //屏幕旋转180度
-void ch1115_rotate(int i)
+void ch1115_rotate(int rotate)
 {
-    if(i==1){
-        ch1115_write_cmd(0xC8);   //正向
+    if(rotate==1){
+        ch1115_write_cmd(0xC8);
         ch1115_write_cmd(0xA1);
 	}else{
-        ch1115_write_cmd(0xC0);   //旋转
+        ch1115_write_cmd(0xC0);
 		ch1115_write_cmd(0xA0);
     }
 }
+
+void ch1115_contrast(int contrast)
+{
+    ch1115_write_cmd(0x81);
+    if(contrast==contrastLow){
+        ch1115_write_cmd(0x01);
+    }else if(contrast==contrastMid){
+        ch1115_write_cmd(0x40);
+    }else if(contrast==contrastHigh){
+        ch1115_write_cmd(0xFF);
+    }
+}
+
 
 oled_driver_t *ch1115_new(void)
 {
@@ -162,6 +175,7 @@ oled_driver_t *ch1115_new(void)
         oled->init=ch1115_init;
         oled->flush=ch1115_flush;
         oled->rotate=ch1115_rotate;
+        oled->contrast=ch1115_contrast;
     }
 
     return oled;

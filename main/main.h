@@ -62,6 +62,7 @@ typedef struct {
     int range;
     int main;
     int rotate;
+    int contrast;
 } store_t;
 
 typedef struct {

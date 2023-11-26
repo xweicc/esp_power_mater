@@ -12,6 +12,7 @@ store_t defaults={
     .range=32,
     .main=0,
     .rotate=0,
+    .contrast=contrastMid,
 };
 
 char *time_str(void)
@@ -450,6 +451,20 @@ void voice_set(void)
     oled_show_string(48, 26, S, FontSize_8x16);
 }
 
+void contrast_set(void)
+{
+    oled_clear();
+    oled_show_text(32, 8, "contrast");
+    if(mvar.store.contrast==contrastHigh){
+        oled_show_text(56, 30, "high");
+    }else if(mvar.store.contrast==contrastMid){
+        oled_show_text(56, 30, "mid");
+    }else if(mvar.store.contrast==contrastLow){
+        oled_show_text(56, 30, "low");
+    }
+}
+
+
 void key_fun_low_volt(int event)
 {
     switch(event){
@@ -575,6 +590,32 @@ void key_fun_voice_set(int event)
             break;
     }
 }
+
+void key_fun_contrast_set(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.store.contrast>contrastLow){
+                mvar.store.contrast--;
+            }
+            oled_contrast(mvar.store.contrast);
+            break;
+        case keyRightShort:
+            if(mvar.store.contrast<contrastHigh){
+                mvar.store.contrast++;
+            }
+            oled_contrast(mvar.store.contrast);
+            break;
+        case keySetShort:
+        case keySetLong:
+            mvar.view=view_show_menu;
+            save();
+            break;
+        default:
+            break;
+    }
+}
+
 
 void key_fun_range_set(int event)
 {
@@ -739,6 +780,7 @@ static struct {
     {"range_set",range_set},
 #endif
     {"voice_set",voice_set},
+    {"contrast",contrast_set},
     {"curt_cal",curt_cal},
     {"volt_cal",volt_cal},
     {"zero_cal",zero_cal},
@@ -948,6 +990,8 @@ void key_handler_fun(int event)
 #endif
     else if(mvar.view==voice_set){
         return key_fun_voice_set(event);
+    }else if(mvar.view==contrast_set){
+        return key_fun_contrast_set(event);
     }else if(mvar.view==range_set){
         return key_fun_range_set(event);
     }else if(mvar.view==volt_cal){
@@ -1085,7 +1129,7 @@ void app_main(void)
     setup_timer(&mvar.elec_timer, elec_timer_fun, 0);
     mod_timer(&mvar.elec_timer, jiffies+HZ);
     
-    mvar.view=main_views[0];
+    mvar.view=main_views[mvar.store.main];
     while(1){
         run_timers();
         vTaskDelay(1);
