@@ -21,6 +21,7 @@ extern unsigned char ascii_8x16[][16];
 extern unsigned char ascii_12x24[][36];
 extern unsigned char ascii_16x32[][64];
 extern unsigned char extend_6x8[][6];
+extern unsigned char extend_8x16[][16];
 extern unsigned char CN[][32];
 extern language_t language[];
 

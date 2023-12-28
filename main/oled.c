@@ -188,6 +188,33 @@ void oled_show_char_extend(uint8_t x,uint8_t y,uint8_t chr)
     }
 }
 
+void oled_show_char_extend_8x16(uint8_t x,uint8_t y,uint8_t chr)
+{
+    for(int i=0;i<16;i++){
+        int bit=y%8;
+        int Xi=x+i;
+        int Yi=y/8;
+        if(i>=8){
+            Yi+=1;
+            Xi-=8;
+        }
+        
+        if(!bit){
+            if(Yi<8 && Xi<128){
+                GRAM[Yi][Xi]=extend_8x16[chr][i];
+            }
+        }else{
+            if(Yi<8 && Xi<128){
+                GRAM[Yi][Xi]&=~hmask[7-bit];
+                GRAM[Yi][Xi]|=extend_8x16[chr][i]<<bit;
+            }
+            if(Yi+1<8 && Xi<128){
+                GRAM[Yi+1][Xi]&=~lmask[bit-1];
+                GRAM[Yi+1][Xi]|=extend_8x16[chr][i]>>(8-bit);
+            }
+        }
+    }
+}
 
 void oled_show_string(uint8_t x,uint8_t y,char *str,uint8_t size)
 {

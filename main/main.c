@@ -621,19 +621,13 @@ void key_fun_range_set(int event)
 {
     switch(event){
         case keyLeftShort:
+            if(mvar.store.range>32){
+                mvar.store.range/=2;
+            }
+            break;
         case keyRightShort:
-            if(mvar.store.res==1){
-                if(mvar.store.range==32){
-                    mvar.store.range=64;
-                }else{
-                    mvar.store.range=32;
-                }
-            }else if(mvar.store.res==2){
-                if(mvar.store.range==32){
-                    mvar.store.range=64;
-                }else{
-                    mvar.store.range=32;
-                }
+            if(mvar.store.range<128){
+                mvar.store.range*=2;
             }
             break;
         case keySetShort:
@@ -646,6 +640,31 @@ void key_fun_range_set(int event)
             break;
     }
 }
+
+void key_fun_res_set(int event)
+{
+    switch(event){
+        case keyLeftShort:
+            if(mvar.store.res>1){
+                mvar.store.res/=2;
+            }
+            break;
+        case keyRightShort:
+            if(mvar.store.res<2){
+                mvar.store.res*=2;
+            }
+            break;
+        case keySetShort:
+        case keySetLong:
+            mvar.view=view_show_menu;
+            save();
+            ina226_set_cal();
+            break;
+        default:
+            break;
+    }
+}
+
 
 void over_curt_set(void)
 {
@@ -683,7 +702,7 @@ void over_temp_set(void)
     oled_clear();
     oled_show_text(32, 8, "over_temp");
     snprintf(S,sizeof(S),"[ %d ]",mvar.store.over_temp);
-    oled_show_string(48, 26, S, FontSize_8x16);
+    oled_show_string(44, 26, S, FontSize_8x16);
 }
 #endif
 
@@ -694,8 +713,20 @@ void range_set(void)
     oled_clear();
     oled_show_text(32, 8, "range_set");
     snprintf(S,sizeof(S),"[ %dA ]",mvar.store.range);
-    oled_show_string(48, 26, S, FontSize_8x16);
+    oled_show_string(40, 26, S, FontSize_8x16);
 }
+
+void res_set(void)
+{
+    char S[32]={0};
+    
+    oled_clear();
+    oled_show_text(32, 8, "res_set");
+    snprintf(S,sizeof(S),"[ %dm  ]",mvar.store.res);
+    oled_show_string(40, 26, S, FontSize_8x16);
+    oled_show_char_extend_8x16(72, 26, 0);
+}
+
 
 void def_set(void)
 {
@@ -778,6 +809,7 @@ static struct {
 #ifdef CONFIG_IDF_TARGET_ESP32C3
     {"over_temp",over_temp_set},
     {"range_set",range_set},
+    {"res_set",res_set},
 #endif
     {"voice_set",voice_set},
     {"contrast",contrast_set},
@@ -994,6 +1026,8 @@ void key_handler_fun(int event)
         return key_fun_contrast_set(event);
     }else if(mvar.view==range_set){
         return key_fun_range_set(event);
+    }else if(mvar.view==res_set){
+        return key_fun_res_set(event);
     }else if(mvar.view==volt_cal){
         return key_fun_volt_cal(event);
     }else if(mvar.view==curt_cal){
