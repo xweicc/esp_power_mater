@@ -112,6 +112,7 @@ void view_show_menu(void);
 void show_alert(void);
 void save(void);
 void save_cal(void);
+void save_mWH(void);
 
 #endif
 

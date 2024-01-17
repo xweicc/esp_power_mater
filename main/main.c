@@ -384,6 +384,7 @@ void elec_timer_fun(unsigned long data)
     if(mW>=3600){
         mvar.msr.mWH+=mW/3600;
         mW%=3600;
+        save_mWH();
     }
     mvar.history.list[mvar.history.len++]=mvar.msr.mA;
     if(mvar.history.len==HISTORY_MAX){
@@ -986,6 +987,10 @@ void key_fun_main(int event)
             mvar.view=main_views[mvar.store.main];
             save();
             break;
+        case keyLeftLong:
+            mvar.msr.mWH=0;
+            save_mWH();
+            break;
         case keyRightShort:
             mvar.store.rotate=!mvar.store.rotate;
             oled_display_rotate(mvar.store.rotate);
@@ -1093,6 +1098,55 @@ out:
 	return ret;
 }
 
+
+int nvram_set_int(char *name, int val)
+{
+	int ret=-1;
+	nvs_handle_t nvram;
+	esp_err_t err=nvs_open("nvram", NVS_READWRITE, &nvram);
+	if(err!=ERR_OK){
+		Printf("nvs_open:%s(%X)\n",esp_err_to_name(err),err);
+		return -1;
+	}
+
+	err=nvs_set_i32(nvram, name, val);
+	if(err!=ERR_OK){
+		Printf("nvs_set_i32 %s:%s(%X)\n",name,esp_err_to_name(err),err);
+		goto out;
+	}
+	
+	err=nvs_commit(nvram);
+	if(err!=ERR_OK){
+		Printf("nvs_commit:%s(%X)\n",esp_err_to_name(err),err);
+		goto out;
+	}
+	ret=0;
+	
+out:
+	nvs_close(nvram);
+	return ret;
+}
+
+int nvram_get_int(char *name, int *val)
+{
+	int ret=-1;
+	nvs_handle_t nvram;
+	esp_err_t err=nvs_open("nvram", NVS_READONLY, &nvram);
+	if(err!=ERR_OK){
+		Printf("nvs_open:%s(%X)\n",esp_err_to_name(err),err);
+		return -1;
+	}
+	err=nvs_get_i32(nvram, name, (int32_t *)val);
+	if(err!=ERR_OK){
+		goto out;
+	}
+	ret=0;
+	
+out:
+	nvs_close(nvram);
+	return ret;
+}
+
 void save(void)
 {
     nvram_set_data("store", &mvar.store, sizeof(mvar.store));
@@ -1103,6 +1157,10 @@ void save_cal(void)
     nvram_set_data("cal", &mvar.cal, sizeof(mvar.cal));
 }
 
+void save_mWH(void)
+{
+    nvram_set_int("mWH", mvar.msr.mWH);
+}
 
 void app_main(void)
 {
@@ -1130,6 +1188,8 @@ void app_main(void)
             mvar.cal.curt[i].val=1.0;
         }
     }
+
+    nvram_get_int("mWH",&mvar.msr.mWH);
     
     init_timers_cpu();
     key_init();
