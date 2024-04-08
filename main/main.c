@@ -8,7 +8,11 @@ store_t defaults={
     .over_curt=30000,
     .over_temp=50,
     .voice=5,
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    .res=1,
+#else
     .res=2,
+#endif
     .range=32,
     .main=0,
     .rotate=0,
@@ -216,15 +220,16 @@ const static struct {
     {70,14,1000}
 };
 
-int timeDivList[] = {1,5,10,60,120};
 
 #define xDivNum 26   //X轴格数
 #define yDivNum 40   //Y轴格数
 
+
 void curt_curve_show(void)
 {
-    int i;
-    int div=timeDivList[mvar.timeDiv];
+    hist_data_t *data=&mvar.hist;
+    hist_level_t *lv=&data->lv[mvar.hlist_lv];
+    int div=lv->div;
     char S[32]={0};
     
     oled_clear();
@@ -244,41 +249,39 @@ void curt_curve_show(void)
     }
     int div_t,all_t,all;
     char *div_u,*all_u;
-    if(div<60){
+    if(div<1000){
         div_t=div;
-        div_u="s";
-    }else{
-        div_t=div/60;
         div_u="m";
+    }else if(div<60000){
+        div_t=div/1000;
+        div_u="S";
+    } else {
+        div_t=div/60000;
+        div_u="M";
     }
     all=div*xDivNum;
-    if(all<60){
+    if(all<1000){
         all_t=all;
-        all_u="s";
-    }else{
-        all_t=all/60;
         all_u="m";
+    }else if(all<60000){
+        all_t=all/1000;
+        all_u="S";
+    }else{
+        all_t=all/60000;
+        all_u="M";
     }
-    int len=snprintf(S,sizeof(S),"%d%s/div t:%d%s",div_t,div_u,all_t,all_u);
-    
+    int len=snprintf(S,sizeof(S),"%d%s/div T:%d%s",div_t,div_u,all_t,all_u);
     oled_show_string(127-len*6, 56, S, FontSize_6x8);
     
-    int n=0;
     int rid=0;
     int max=0,min=-1;
-    int start;
-    if(mvar.history.len>xDivNum*div){
-        start=mvar.history.len-xDivNum*div;
-    }else{
-        start=mvar.history.len-mvar.history.len/div*div;
+    int start=0;
+    if(lv->len>xDivNum){
+        start=lv->len-xDivNum;
     }
 
-    for(int i=start;i<mvar.history.len;i+=div){
-        int val=0;
-        for(int j=0;j<div;j++){
-            val+=mvar.history.list[i+j];
-        }
-        val/=div;
+    for(int i=start;i<MIN(xDivNum,lv->len)+start;i++){
+        int val=lv->list[i];
         if(val>max){
             max=val;
         }
@@ -304,6 +307,7 @@ void curt_curve_show(void)
     oled_show_string(55+len*6, 0, S, FontSize_6x8);
     
     //Y坐标
+    int n=0;
     for(int i=51;i>0 && n<=5;i-=8,n++){
         oled_draw_line(19, i, 20, i);
         if(rangeTab[rid].max>=1000){
@@ -317,24 +321,64 @@ void curt_curve_show(void)
     oled_show_string(0, 55, S, FontSize_6x8);
 
     int last=0;
-    for(i=start,n=0;i<mvar.history.len && n<xDivNum;i+=div,n++){
-        int val=0;
-        for(int j=0;j<div;j++){
-            val+=mvar.history.list[i+j];
-        }
-        val/=div;
+    for(int i=start;i<MIN(xDivNum, lv->len)+start;i++){
+        int val=lv->list[i];
         val=yDivNum-(val*yDivNum/(rangeTab[rid].max*rangeTab[rid].base));
         val+=11;
-        if(n==0){
+        if(i==start){
             last=val;
             continue;
         }else{
-            oled_draw_line(21+(n-1)*4, last, 21+n*4, val);
+            oled_draw_line(21+(i-start-1)*4, last, 21+(i-start)*4, val);
             last=val;
         }
     }
 }
 
+
+void hist_data_init(void)
+{
+    hist_data_t *data=&mvar.hist;
+
+    data->lv[0].div=50; //50ms
+    data->lv[0].comp=20;
+
+    data->lv[1].div=1000;   //1S
+    data->lv[1].comp=5;
+
+    data->lv[2].div=5000;  //5S
+    data->lv[2].comp=2;
+
+    data->lv[3].div=10000;  //10S
+    data->lv[3].comp=6;
+
+    data->lv[4].div=60000;  //60S
+    data->lv[4].comp=2;
+
+    data->lv[5].div=120000;  //120S
+}
+
+void hist_data_update(int lv, int mA)
+{
+    hist_data_t *data=&mvar.hist;
+    
+    data->lv[lv].list[data->lv[lv].len++]=mA;
+    data->lv[lv].num++;
+    if(data->lv[lv].comp && data->lv[lv].num==data->lv[lv].comp){
+        int sum=0;
+        for(int i=0;i<data->lv[lv].comp;i++){
+            sum+=data->lv[lv].list[i];
+        }
+        sum/=data->lv[lv].comp;
+        data->lv[lv].num=0;
+        hist_data_update(lv+1, sum);
+    }
+    
+    if(data->lv[lv].len==HDATA_SIZE){
+        data->lv[lv].len-=HDATA_DROP;
+        memmove(data->lv[lv].list,data->lv[lv].list+HDATA_DROP,(HDATA_SIZE-HDATA_DROP)*4);
+    }
+}
 
 void show_alert(void)
 {
@@ -385,11 +429,6 @@ void elec_timer_fun(unsigned long data)
         mvar.msr.mWH+=mW/3600;
         mW%=3600;
         save_mWH();
-    }
-    mvar.history.list[mvar.history.len++]=mvar.msr.mA;
-    if(mvar.history.len==HISTORY_MAX){
-        memmove(mvar.history.list,mvar.history.list+HISTORY_DROP,(HISTORY_MAX-HISTORY_DROP)*4);
-        mvar.history.len-=HISTORY_DROP;
     }
     mod_timer(&mvar.elec_timer, jiffies+HZ);
 }
@@ -907,13 +946,13 @@ void key_fun_curt_curve(int event)
 {
     switch(event){
         case keyLeftShort:
-            if(mvar.timeDiv>0){
-                mvar.timeDiv--;
+            if(mvar.hlist_lv>0){
+                mvar.hlist_lv--;
             }
             break;
         case keyRightShort:
-            if(mvar.timeDiv<ASIZE(timeDivList)-1){
-                mvar.timeDiv++;
+            if(mvar.hlist_lv<HDATA_LV-1){
+                mvar.hlist_lv++;
             }
             break;
         case keySetShort:
@@ -1202,6 +1241,7 @@ void app_main(void)
     
     ina226_init();
     oled_init();
+    hist_data_init();
     
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 	xTaskCreate(ina226_task, "ina226_task", 2048, NULL, 5, NULL);

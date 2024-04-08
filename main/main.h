@@ -31,8 +31,9 @@
         printf("[%s:%d]:"format,__ASSERT_FUNC,__LINE__,##args);\
     }while(0)
 
-#define HISTORY_MAX 3600
-#define HISTORY_DROP 360
+#define HDATA_SIZE 30
+#define HDATA_LV 6
+#define HDATA_DROP 4
 
 typedef void(*view_show)(void);
 typedef void(*menu_fun)(void);
@@ -46,12 +47,21 @@ typedef struct {
     int max_mA;
     int max_mW;
     int mWH;
+    int dir;
 } measure_t;
 
 typedef struct {
-    int list[HISTORY_MAX];
+    int list[HDATA_SIZE];
     int len;
-} history_t;
+    int div;    //ms
+    int num;
+    int comp;
+}hist_level_t;
+
+typedef struct {
+    hist_level_t lv[HDATA_LV];
+}hist_data_t;
+
 
 typedef struct {
     int low_volt;
@@ -83,17 +93,17 @@ typedef struct {
     int menuStart;
     int menuIdx;
     int main_idx;
-    int timeDiv;
     int seting;
     int set_idx;
     int cal_idx;
+    int hlist_lv;
     store_t store;
     calibration_t cal;
     int cal_point;
     view_show view;
     measure_t msr;
     buzzer_var_t buzzer;
-    history_t history;
+    hist_data_t hist;
     key_trigger_t keys[keyNumMax];
     temperature_sensor_handle_t temp_handle;
     struct timer_list temp_timer;
@@ -113,6 +123,7 @@ void show_alert(void);
 void save(void);
 void save_cal(void);
 void save_mWH(void);
+void hist_data_update(int lv, int mA);
 
 #endif
 

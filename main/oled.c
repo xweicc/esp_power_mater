@@ -408,8 +408,11 @@ void oled_timer_fun(unsigned long data)
 void oled_task(void *param)
 {
     while(1){
+        unsigned long tm=jiffies;
         oled_run();
-        vTaskDelay(50);
+        tm=jiffies-tm;
+        //Printf("tm:%lu\n",tm);
+        vTaskDelay(30);
     }
 }
 

@@ -2,11 +2,14 @@
 ### 编译说明
 - 系统环境：Ubuntu 22.04
 - 安装esp-idf：https://docs.espressif.com/projects/esp-idf/zh_CN/release-v5.1/esp32c3/get-started/linux-macos-setup.html
+- 选择配置
+    - XT60：`cp sdkconfig.esp32c3 sdkconfig`
+    - XT30：`cp sdkconfig.esp32c2 sdkconfig`
 - 执行`idf.py build`编译
 - 执行`idf.py flash`烧录
 ### 功能说明
 - 显示电压，电流，功率
-- 电流历史曲线显示
+- 电流曲线显示
 - 过流，低压，蜂鸣器报警
 - 电压电流校准
 ### 硬件说明

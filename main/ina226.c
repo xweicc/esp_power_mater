@@ -68,13 +68,16 @@ int ina226_get_voltage(void)
 }
 
 //获取电流，mA
-int ina226_get_current(void)
+int ina226_get_current(int *dir)
 {
     int16_t data = 0;
     ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
     data+=mvar.cal.zero;
     if(data<0){
+        *dir=1;
         data=0-data;
+    }else{
+        *dir=0;
     }
     return data * CalTab[mvar.cal_idx].currentLSB / 1000;
 }
@@ -127,7 +130,7 @@ int ina226_init(void)
         return -1;
     }
 
-    ina226_register_write(INA226_REG_CONF, 0x4927); //AGV:128,VBUSCT:1.1ms
+    ina226_register_write(INA226_REG_CONF, 0x456F); //AGV:16*CT:1.1ms
     ina226_set_cal();
 
     return 0;
@@ -207,7 +210,7 @@ int get_cal_curt(int mA)
 void ina226_run(void)
 {
     int v=ina226_get_voltage();
-    int a=ina226_get_current();
+    int a=ina226_get_current(&mvar.msr.dir);
     mvar.msr.raw_mV=v;
     mvar.msr.raw_mA=a;
     mvar.msr.mV=get_cal_volt(v);
@@ -219,6 +222,7 @@ void ina226_run(void)
     if(mvar.msr.mW>mvar.msr.max_mW){
         mvar.msr.max_mW=mvar.msr.mW;
     }
+    hist_data_update(0,mvar.msr.mA);
 }
 
 void ina226_timer_fun(unsigned long data)
