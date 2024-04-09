@@ -74,8 +74,10 @@ int ina226_get_current(int *dir)
     ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
     data+=mvar.cal.zero;
     if(data<0){
-        *dir=1;
+        *dir=-1;
         data=0-data;
+    }else if(data>0){
+        *dir=1;
     }else{
         *dir=0;
     }

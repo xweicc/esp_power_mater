@@ -81,6 +81,7 @@ char *power_str2(char *unit)
     return S;
 }
 
+
 char *elec_str2(char *unit)
 {
     static char S[16]={0};
@@ -151,7 +152,7 @@ char *resistor_str(void)
     return S;
 }
 
-void view_show_main(void)
+void view_show_main2(void)
 {
     oled_clear();
     oled_show_string(0, 0, voltage_str(), FontSize_16x32);
@@ -162,9 +163,16 @@ void view_show_main(void)
     oled_draw_dot_line(97, 10, 127, 10);
 
     char unit[8];
+    uint8_t chr=4;
+    if(mvar.msr.dir>0){
+        chr=5;
+    }else if(mvar.msr.dir<0){
+        chr=6;
+    }
     oled_show_string(97, 12, power_str2(unit), FontSize_6x8);
     oled_show_string(97, 20, unit, FontSize_6x8);
     oled_draw_dot_line(97, 30, 127, 30);
+    oled_show_char_extend(103, 20, chr);
 
     oled_show_string(97, 33, elec_str2(unit), FontSize_6x8);
     oled_show_string(97, 41, unit, FontSize_6x8);
@@ -175,11 +183,11 @@ void view_show_main(void)
     oled_show_char_extend(115, 55, 0);
 #else
     oled_show_string(97, 55, resistor_str(), FontSize_6x8);
-    oled_show_char_extend(121, 55, 4);
+    oled_show_char_extend(121, 55, 3);
 #endif
 }
 
-void view_show_main2(void)
+void view_show_main(void)
 {
     oled_clear();
     oled_show_text(0, 5, "voltage");
@@ -361,22 +369,23 @@ void hist_data_init(void)
 void hist_data_update(int lv, int mA)
 {
     hist_data_t *data=&mvar.hist;
+    hist_level_t *lv_t=&data->lv[lv];
     
-    data->lv[lv].list[data->lv[lv].len++]=mA;
-    data->lv[lv].num++;
-    if(data->lv[lv].comp && data->lv[lv].num==data->lv[lv].comp){
+    lv_t->list[lv_t->len++]=mA;
+    lv_t->num++;
+    if(lv_t->comp && lv_t->num==lv_t->comp){
         int sum=0;
-        for(int i=0;i<data->lv[lv].comp;i++){
-            sum+=data->lv[lv].list[i];
+        for(int i=lv_t->len-lv_t->comp;i<lv_t->len;i++){
+            sum+=lv_t->list[i];
         }
-        sum/=data->lv[lv].comp;
-        data->lv[lv].num=0;
+        sum/=lv_t->comp;
+        lv_t->num=0;
         hist_data_update(lv+1, sum);
     }
     
-    if(data->lv[lv].len==HDATA_SIZE){
-        data->lv[lv].len-=HDATA_DROP;
-        memmove(data->lv[lv].list,data->lv[lv].list+HDATA_DROP,(HDATA_SIZE-HDATA_DROP)*4);
+    if(lv_t->len==HDATA_SIZE){
+        lv_t->len-=HDATA_DROP;
+        memmove(lv_t->list,lv_t->list+HDATA_DROP,(HDATA_SIZE-HDATA_DROP)*4);
     }
 }
 
@@ -992,10 +1001,10 @@ void key_fun_menu(int event)
         case keyRightShort:
             if(mvar.menuIdx<ASIZE(menus)-1){
                 mvar.menuIdx++;
-                Printf("mvar.menuIdx:%d\n",mvar.menuIdx);
+                //Printf("mvar.menuIdx:%d\n",mvar.menuIdx);
                 if(mvar.menuIdx>mvar.menuStart+3){
                     mvar.menuStart=mvar.menuIdx-3;
-                    Printf("mvar.menuStart:%d\n",mvar.menuStart);
+                    //Printf("mvar.menuStart:%d\n",mvar.menuStart);
                 }
             }
             break;
@@ -1006,7 +1015,7 @@ void key_fun_menu(int event)
             mvar.view=menus[mvar.menuIdx].fun;
             break;
         case keySetLong:
-            mvar.view=main_views[0];
+            mvar.view=main_views[mvar.store.main];
             break;
         default :
             break;
