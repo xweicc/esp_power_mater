@@ -18,11 +18,16 @@ void i2c_init(void)
 {
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
+        #ifdef CONFIG_LCD
+        .sda_io_num = 19,
+        .scl_io_num = 18,
+        #else
         .sda_io_num = 1,
         .scl_io_num = 0,
+        #endif
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 400000,
+        .master.clk_speed = 200000,
     };
 
     i2c_param_config(0, &conf);
@@ -72,6 +77,9 @@ int ina226_get_current(int *dir)
 {
     int16_t data = 0;
     ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
+    if(data<=2 && data>=-2){
+        data=0;
+    }
     data+=mvar.cal.zero;
     if(data<0){
         *dir=-1;
@@ -224,7 +232,9 @@ void ina226_run(void)
     if(mvar.msr.mW>mvar.msr.max_mW){
         mvar.msr.max_mW=mvar.msr.mW;
     }
+    #ifndef CONFIG_LCD
     hist_data_update(0,mvar.msr.mA);
+    #endif
 }
 
 void ina226_timer_fun(unsigned long data)

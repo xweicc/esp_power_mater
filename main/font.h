@@ -1,8 +1,6 @@
 #ifndef __FONT_H__
 #define __FONT_H__
 
-#define ASIZE(a) (sizeof(a)/sizeof(a[0]))
-
 enum{
     FontSize_6x8,
     FontSize_8x16,
@@ -15,6 +13,10 @@ typedef struct {
     int *cn;
     int len;
 } language_t;
+
+#ifndef ASIZE
+#define ASIZE(a) (sizeof(a)/sizeof(a[0]))
+#endif
 
 extern unsigned char ascii_6x8[][6];
 extern unsigned char ascii_8x16[][16];

@@ -6,428 +6,49 @@ meter_var_t mvar;
 store_t defaults={
     .low_volt=5000,
     .over_curt=30000,
-    .over_temp=50,
+    .over_temp=80,
     .voice=5,
 #ifdef CONFIG_IDF_TARGET_ESP32C3
     .res=1,
 #else
     .res=2,
 #endif
+#ifdef CONFIG_LCD
+    .range=64,
+#else
     .range=32,
+#endif
     .main=0,
     .rotate=0,
-    .contrast=contrastMid,
-};
-
-char *time_str(void)
-{
-    time_t now;
-    struct tm tm;
-    static char str[16]={0};
-    
-    time(&now);
-    localtime_r(&now, &tm);
-    snprintf(str, sizeof(str), "%02d:%02d", tm.tm_min, tm.tm_sec);
-
-    return str;
-}
-
-char *voltage_str(void)
-{
-    static char S[16]={0};
-    snprintf(S,sizeof(S),"%.2fV",(double)mvar.msr.mV/1000);
-    return S;
-}
-
-char *current_str(int mA)
-{
-    static char S[16]={0};
-    if(mA>=1000){
-        snprintf(S,sizeof(S),"%.2fA",(double)mA/1000);
-    } else {
-        snprintf(S,sizeof(S),"%dmA",mA);
-    }
-    return S;
-}
-
-char *power_str(void)
-{
-    static char S[16]={0};
-    if(mvar.msr.mW>=100000){
-        snprintf(S,sizeof(S),"%.1fW",(double)mvar.msr.mW/1000);
-    } else if(mvar.msr.mW>=1000){
-        snprintf(S,sizeof(S),"%.2fW",(double)mvar.msr.mW/1000);
-    } else {
-        snprintf(S,sizeof(S),"%dmW",mvar.msr.mW);
-    }
-    return S;
-}
-
-char *power_str2(char *unit)
-{
-    static char S[16]={0};
-    char W[16]={0};
-    if(mvar.msr.mW>=100000){
-        snprintf(W,sizeof(W),"%.1f",(double)mvar.msr.mW/1000);
-        sprintf(unit,"%5s","W");
-    } else if(mvar.msr.mW>=1000){
-        snprintf(W,sizeof(W),"%.2f",(double)mvar.msr.mW/1000);
-        sprintf(unit,"%5s","W");
-    } else {
-        snprintf(W,sizeof(W),"%d",mvar.msr.mW);
-        sprintf(unit,"%5s","mW");
-    }
-    snprintf(S,sizeof(S),"%5s",W);
-    return S;
-}
-
-
-char *elec_str2(char *unit)
-{
-    static char S[16]={0};
-    char W[16]={0};
-    if(mvar.msr.mWH>=100000){
-        snprintf(W,sizeof(W),"%.1f",(double)mvar.msr.mWH/1000);
-        sprintf(unit,"%5s","WH");
-    } else if(mvar.msr.mWH>=1000){
-        snprintf(W,sizeof(W),"%.2f",(double)mvar.msr.mWH/1000);
-        sprintf(unit,"%5s","WH");
-    } else {
-        snprintf(W,sizeof(W),"%d",mvar.msr.mWH);
-        sprintf(unit,"%5s","mWH");
-    }
-    snprintf(S,sizeof(S),"%5s",W);
-    return S;
-}
-
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-char *temp_str(void)
-{
-    static char S[16]={0};
-    char V[16]={0};
-    snprintf(V,sizeof(V),"%d C",(int)mvar.temp);
-    snprintf(S,sizeof(S),"%5s",V);
-    return S;
-}
-#endif
-
-void show_box(int x1, int y1, int x2, int y2)
-{
-    oled_draw_line(x1, y1, x2, y1);
-    oled_draw_line(x1, y2, x2, y2);
-    oled_draw_line(x1, y1, x1, y2);
-    oled_draw_line(x2, y1, x2, y2);
-    
-    oled_draw_line(x1+1, y1+1, x2-1, y1+1);
-    oled_draw_line(x1+1, y2-1, x2-1, y2-1);
-    oled_draw_line(x1+1, y1+1, x1, y2-1);
-    oled_draw_line(x2-1, y1+1, x2-1, y2-1);
-    for(int x=x1+2;x<x2-1;x++){
-        for(int y=y1+2;y<y2-1;y++){
-            oled_clear_dot(x, y);
-        }
-    }
-}
-
-char *resistor_str(void)
-{
-    static char S[16]={0};
-    char str[16]={0};
-    int R=mvar.msr.mV*1000/mvar.msr.mA;
-    
-    if(R<1000){
-        snprintf(str,sizeof(str),"%dm",R);
-    }else if(R<10000){
-        snprintf(str,sizeof(str),"%.2f",(double)R/1000);
-    }else if(R<100000){
-        snprintf(str,sizeof(str),"%.1f",(double)R/1000);
-    }else if(R<1000000){
-        snprintf(str,sizeof(str),"%d",R/1000);
-    }else if(R<10000000){
-        snprintf(str,sizeof(str),"%.1fK",(double)R/1000000);
-    }else if(R<1000000000){
-        snprintf(str,sizeof(str),"%dK",R/1000000);
-    }
-    snprintf(S,sizeof(S),"%4s",str);
-    return S;
-}
-
-void view_show_main2(void)
-{
-    oled_clear();
-    oled_show_string(0, 0, voltage_str(), FontSize_16x32);
-    oled_show_string(0, 32, current_str(mvar.msr.mA), FontSize_16x32);
-    oled_draw_dot_line(96, 0, 96, 63);
-
-    oled_show_string(97, 1, time_str(), FontSize_6x8);
-    oled_draw_dot_line(97, 10, 127, 10);
-
-    char unit[8];
-    uint8_t chr=4;
-    if(mvar.msr.dir>0){
-        chr=5;
-    }else if(mvar.msr.dir<0){
-        chr=6;
-    }
-    oled_show_string(97, 12, power_str2(unit), FontSize_6x8);
-    oled_show_string(97, 20, unit, FontSize_6x8);
-    oled_draw_dot_line(97, 30, 127, 30);
-    oled_show_char_extend(103, 20, chr);
-
-    oled_show_string(97, 33, elec_str2(unit), FontSize_6x8);
-    oled_show_string(97, 41, unit, FontSize_6x8);
-    oled_draw_dot_line(97, 51, 127, 51);
-
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-    oled_show_string(97, 55, temp_str(), FontSize_6x8);
-    oled_show_char_extend(115, 55, 0);
+    .lang=languageCN,
+#ifdef CONFIG_LCD
+    .low_volt_off=5000,
+    .over_curt_off=50000,
 #else
-    oled_show_string(97, 55, resistor_str(), FontSize_6x8);
-    oled_show_char_extend(121, 55, 3);
+    .contrast=contrastMid,
 #endif
-}
-
-void view_show_main(void)
-{
-    oled_clear();
-    oled_show_text(0, 5, "voltage");
-    oled_show_text(0, 25, "current");
-    oled_show_text(0, 45, "power");
-    oled_show_string(34, 5, ":", FontSize_8x16);
-    oled_show_string(34, 25, ":", FontSize_8x16);
-    oled_show_string(34, 45, ":", FontSize_8x16);
-    oled_show_string(42, 40, power_str(), FontSize_12x24);
-    oled_show_string(42, 20, current_str(mvar.msr.mA), FontSize_12x24);
-    oled_show_string(42, 0, voltage_str(), FontSize_12x24);
-}
-
-
-//量程范围定义
-const static struct {
-    int max;    //最大量程
-    int div;    //每格值
-    int base;   //基数
-} rangeTab [] = {
-    {50,10,1},
-    {100,20,1},
-    {250,50,1},
-    {500,100,1},
-    {1000,200,1},
-    {2000,400,1},
-    {5,1,1000},
-    {10,2,1000},
-    {15,3,1000},
-    {20,4,1000},
-    {25,5,1000},
-    {30,6,1000},
-    {35,7,1000},
-    {40,8,1000},
-    {45,9,1000},
-    {50,10,1000},
-    {60,12,1000},
-    {70,14,1000}
+#ifdef CONFIG_ESC
+#error 111111
+    .hz=1000,
+#endif
 };
 
-
-#define xDivNum 26   //X轴格数
-#define yDivNum 40   //Y轴格数
-
-
-void curt_curve_show(void)
+#ifdef CONFIG_ESC
+const int hz_list[]={100,200,500,1000,2000,5000,10000,20000,30000,40000,50000};
+const int hz_list_len = ASIZE(hz_list);
+int hz_list_id(int hz)
 {
-    hist_data_t *data=&mvar.hist;
-    hist_level_t *lv=&data->lv[mvar.hlist_lv];
-    int div=lv->div;
-    char S[32]={0};
-    
-    oled_clear();
-    //X轴
-    oled_draw_line(21, 51, 127, 51);
-    oled_draw_line(124, 49, 127, 51);
-    oled_draw_line(124, 53, 127, 51);
-
-    //Y轴
-    oled_draw_line(21, 0, 21, 51);
-    oled_draw_line(21, 0, 19, 3);
-    oled_draw_line(21, 0, 23, 3);
-
-    //X坐标
-    for(int i=21;i<124;i+=4){
-        oled_draw_line(i, 52, i, 53);
-    }
-    int div_t,all_t,all;
-    char *div_u,*all_u;
-    if(div<1000){
-        div_t=div;
-        div_u="m";
-    }else if(div<60000){
-        div_t=div/1000;
-        div_u="S";
-    } else {
-        div_t=div/60000;
-        div_u="M";
-    }
-    all=div*xDivNum;
-    if(all<1000){
-        all_t=all;
-        all_u="m";
-    }else if(all<60000){
-        all_t=all/1000;
-        all_u="S";
-    }else{
-        all_t=all/60000;
-        all_u="M";
-    }
-    int len=snprintf(S,sizeof(S),"%d%s/div T:%d%s",div_t,div_u,all_t,all_u);
-    oled_show_string(127-len*6, 56, S, FontSize_6x8);
-    
-    int rid=0;
-    int max=0,min=-1;
-    int start=0;
-    if(lv->len>xDivNum){
-        start=lv->len-xDivNum;
-    }
-
-    for(int i=start;i<MIN(xDivNum,lv->len)+start;i++){
-        int val=lv->list[i];
-        if(val>max){
-            max=val;
-        }
-        if(min==-1 || val<min){
-            min=val;
+    for(int i=0;i<ASIZE(hz_list);i++){
+        if(hz_list[i]==hz){
+            return i;
         }
     }
-
-    //量程
-    for(int i=0;i<ASIZE(rangeTab);i++){
-        if((rangeTab[i].max*rangeTab[i].base)>max){
-            rid=i;
-            break;
-        }
-    }
-    
-    //显示最大最小值
-    len=snprintf(S,sizeof(S),"%s",current_str(max));
-    oled_show_char_extend(37, 0, 1);
-    oled_show_string(43, 0, S, FontSize_6x8);
-    oled_show_char_extend(49+len*6, 0, 2);
-    snprintf(S,sizeof(S),"%s",current_str(min));
-    oled_show_string(55+len*6, 0, S, FontSize_6x8);
-    
-    //Y坐标
-    int n=0;
-    for(int i=51;i>0 && n<=5;i-=8,n++){
-        oled_draw_line(19, i, 20, i);
-        if(rangeTab[rid].max>=1000){
-            snprintf(S,sizeof(S),"%.1f",(double)(rangeTab[rid].div*n)/1000);
-        }else{
-            snprintf(S,sizeof(S),"%3d",rangeTab[rid].div*n);
-        }
-        oled_show_string(0, i-4, S, FontSize_6x8);
-    }
-    snprintf(S,sizeof(S),"%3s",(rangeTab[rid].base==1 && rangeTab[rid].max<1000)?"mA":"A");
-    oled_show_string(0, 55, S, FontSize_6x8);
-
-    int last=0;
-    for(int i=start;i<MIN(xDivNum, lv->len)+start;i++){
-        int val=lv->list[i];
-        val=yDivNum-(val*yDivNum/(rangeTab[rid].max*rangeTab[rid].base));
-        val+=11;
-        if(i==start){
-            last=val;
-            continue;
-        }else{
-            oled_draw_line(21+(i-start-1)*4, last, 21+(i-start)*4, val);
-            last=val;
-        }
-    }
+    return -1;
 }
+#endif
 
-
-void hist_data_init(void)
-{
-    hist_data_t *data=&mvar.hist;
-
-    data->lv[0].div=50; //50ms
-    data->lv[0].comp=20;
-
-    data->lv[1].div=1000;   //1S
-    data->lv[1].comp=5;
-
-    data->lv[2].div=5000;  //5S
-    data->lv[2].comp=2;
-
-    data->lv[3].div=10000;  //10S
-    data->lv[3].comp=6;
-
-    data->lv[4].div=60000;  //60S
-    data->lv[4].comp=2;
-
-    data->lv[5].div=120000;  //120S
-}
-
-void hist_data_update(int lv, int mA)
-{
-    hist_data_t *data=&mvar.hist;
-    hist_level_t *lv_t=&data->lv[lv];
-    
-    lv_t->list[lv_t->len++]=mA;
-    lv_t->num++;
-    if(lv_t->comp && lv_t->num==lv_t->comp){
-        int sum=0;
-        for(int i=lv_t->len-lv_t->comp;i<lv_t->len;i++){
-            sum+=lv_t->list[i];
-        }
-        sum/=lv_t->comp;
-        lv_t->num=0;
-        hist_data_update(lv+1, sum);
-    }
-    
-    if(lv_t->len==HDATA_SIZE){
-        lv_t->len-=HDATA_DROP;
-        memmove(lv_t->list,lv_t->list+HDATA_DROP,(HDATA_SIZE-HDATA_DROP)*4);
-    }
-}
-
-void show_alert(void)
-{
-    char *type=NULL;
-    static int alert=0;
-
-    if(mvar.msr.mV < mvar.store.low_volt){
-        type="low_volt";
-    }else if(mvar.msr.mA > mvar.store.over_curt){
-        type="over_curt";
-    }else if(mvar.temp > mvar.store.over_temp){
-        type="over_temp";
-    }
-
-    if(!type){
-        return ;
-    }
-
-    if(mvar.view!=view_show_main
-        && mvar.view!=view_show_main2
-        && mvar.view!=curt_curve_show){
-        return ;
-    }
-    
-    if(alert<3){
-        alert++;
-        show_box(24,16,112,48);
-        oled_show_text(32, 24, type);
-        buzzer_set(buzzerShort);
-    }else if(alert<6){
-        alert++;
-    }else{
-        alert=0;
-    }
-}
-
-static view_show main_views[]={
-    view_show_main,
-    view_show_main2
-};
+const int volt_cal_point[]={5000,10000,15000,20000};    //mV
+const int curt_cal_point[]={1000,2000,5000,10000,20000,50000};  //mA
 
 //电量统计，1秒执行一次
 void elec_timer_fun(unsigned long data)
@@ -460,642 +81,6 @@ void temp_init(void)
     mod_timer(&mvar.temp_timer, jiffies+HZ);
 }
 #endif
-
-void low_volt_set(void)
-{
-    char S[32]={0};
-    int x=0;
-    
-    oled_clear();
-    oled_show_text(32, 8, "low_volt");
-    if(mvar.store.low_volt>=10000){
-        snprintf(S,sizeof(S),"[%.2fV]",(double)mvar.store.low_volt/1000);
-    }else{
-        snprintf(S,sizeof(S),"[0%.2fV]",(double)mvar.store.low_volt/1000);
-    }
-    if(mvar.set_idx>=2){
-        x=mvar.set_idx+2;
-    }else{
-        x=mvar.set_idx+1;
-    }
-    if(mvar.seting){
-        static int blink=0;
-        if(blink){
-            S[x]=' ';
-        }
-        blink=!blink;
-    }
-    oled_show_string(40, 26, S, FontSize_8x16);
-    oled_draw_line(40+x*8, 41, 40+x*8+7, 41);
-}
-
-
-void voice_set(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    oled_show_text(32, 8, "voice_set");
-    snprintf(S,sizeof(S),"[ %d ]",mvar.store.voice);
-    oled_show_string(48, 26, S, FontSize_8x16);
-}
-
-void contrast_set(void)
-{
-    oled_clear();
-    oled_show_text(32, 8, "contrast");
-    if(mvar.store.contrast==contrastHigh){
-        oled_show_text(56, 30, "high");
-    }else if(mvar.store.contrast==contrastMid){
-        oled_show_text(56, 30, "mid");
-    }else if(mvar.store.contrast==contrastLow){
-        oled_show_text(56, 30, "low");
-    }
-}
-
-
-void key_fun_low_volt(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(!mvar.seting){
-                if(mvar.set_idx>0){
-                    mvar.set_idx--;
-                }
-            }else{
-                int dec=pow(10,4-mvar.set_idx);
-                if(mvar.store.low_volt>=dec){
-                    mvar.store.low_volt-=dec;
-                }
-            }
-            break;
-        case keyRightShort:
-            if(!mvar.seting){
-                if(mvar.set_idx<3){
-                    mvar.set_idx++;
-                }
-            }else{
-                int dec=pow(10,4-mvar.set_idx);
-                if(mvar.store.low_volt<30000){
-                    mvar.store.low_volt+=dec;
-                }
-            }
-            break;
-        case keySetShort:
-            mvar.seting=!mvar.seting;
-            break;
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            break;
-        default:
-            break;
-    }
-}
-
-void key_fun_over_curt(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(!mvar.seting){
-                if(mvar.set_idx>0){
-                    mvar.set_idx--;
-                }
-            }else{
-                int dec=pow(10,4-mvar.set_idx);
-                if(mvar.store.over_curt>=dec){
-                    mvar.store.over_curt-=dec;
-                }
-            }
-            break;
-        case keyRightShort:
-            if(!mvar.seting){
-                if(mvar.set_idx<3){
-                    mvar.set_idx++;
-                }
-            }else{
-                int dec=pow(10,4-mvar.set_idx);
-                if(mvar.store.over_curt<64000){
-                    mvar.store.over_curt+=dec;
-                }
-            }
-            break;
-        case keySetShort:
-            mvar.seting=!mvar.seting;
-            break;
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            break;
-        default:
-            break;
-    }
-}
-
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-void key_fun_over_temp(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.over_temp>20){
-                mvar.store.over_temp--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.store.over_temp<80){
-                mvar.store.over_temp++;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            break;
-        default:
-            break;
-    }
-}
-#endif
-
-void key_fun_voice_set(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.voice>0){
-                mvar.store.voice--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.store.voice<10){
-                mvar.store.voice++;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            break;
-        default:
-            break;
-    }
-}
-
-void key_fun_contrast_set(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.contrast>contrastLow){
-                mvar.store.contrast--;
-            }
-            oled_contrast(mvar.store.contrast);
-            break;
-        case keyRightShort:
-            if(mvar.store.contrast<contrastHigh){
-                mvar.store.contrast++;
-            }
-            oled_contrast(mvar.store.contrast);
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            break;
-        default:
-            break;
-    }
-}
-
-
-void key_fun_range_set(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.range>32){
-                mvar.store.range/=2;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.store.range<128){
-                mvar.store.range*=2;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            ina226_set_cal();
-            break;
-        default:
-            break;
-    }
-}
-
-void key_fun_res_set(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.res>1){
-                mvar.store.res/=2;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.store.res<2){
-                mvar.store.res*=2;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            save();
-            ina226_set_cal();
-            break;
-        default:
-            break;
-    }
-}
-
-
-void over_curt_set(void)
-{
-    char S[32]={0};
-    int x=0;
-    
-    oled_clear();
-    oled_show_text(32, 8, "over_curt");
-    if(mvar.store.over_curt>=10000){
-        snprintf(S,sizeof(S),"[%.2fA]",(double)mvar.store.over_curt/1000);
-    }else{
-        snprintf(S,sizeof(S),"[0%.2fA]",(double)mvar.store.over_curt/1000);
-    }
-    if(mvar.set_idx>=2){
-        x=mvar.set_idx+2;
-    }else{
-        x=mvar.set_idx+1;
-    }
-    if(mvar.seting){
-        static int blink=0;
-        if(blink){
-            S[x]=' ';
-        }
-        blink=!blink;
-    }
-    oled_show_string(40, 26, S, FontSize_8x16);
-    oled_draw_line(40+x*8, 41, 40+x*8+7, 41);
-}
-
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-void over_temp_set(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    oled_show_text(32, 8, "over_temp");
-    snprintf(S,sizeof(S),"[ %d ]",mvar.store.over_temp);
-    oled_show_string(44, 26, S, FontSize_8x16);
-}
-#endif
-
-void range_set(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    oled_show_text(32, 8, "range_set");
-    snprintf(S,sizeof(S),"[ %dA ]",mvar.store.range);
-    oled_show_string(40, 26, S, FontSize_8x16);
-}
-
-void res_set(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    oled_show_text(32, 8, "res_set");
-    snprintf(S,sizeof(S),"[ %dm  ]",mvar.store.res);
-    oled_show_string(40, 26, S, FontSize_8x16);
-    oled_show_char_extend_8x16(72, 26, 0);
-}
-
-
-void def_set(void)
-{
-    oled_clear();
-    oled_show_text(8, 24, "def_ok");
-    mvar.store=defaults;
-    save();
-    vTaskDelay(500);
-    mvar.view=view_show_menu;
-}
-
-const int volt_cal_point[]={5000,10000,15000,20000};    //mV
-const int curt_cal_point[]={1000,2000,5000,10000,20000,50000};  //mA
-
-void volt_cal(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    
-    oled_show_text(20, 10, "cal_dot");
-    snprintf(S,sizeof(S),"<%dV>",volt_cal_point[mvar.cal_point]/1000);
-    oled_show_string(76, 10, S, FontSize_8x16);
-    
-    oled_show_text(20, 30, "voltage");
-    oled_show_string(60, 30, voltage_str(), FontSize_8x16);
-
-    float cal=mvar.cal.volt[mvar.cal_point].val;
-    if(cal>1.0){
-        snprintf(S,sizeof(S),"+%f",cal-1.0);
-    }else{
-        snprintf(S,sizeof(S),"-%f",1.0-cal);
-    }
-    oled_show_string(40, 50, S, FontSize_6x8);
-}
-
-
-void curt_cal(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-    
-    oled_show_text(20, 10, "cal_dot");
-    snprintf(S,sizeof(S),"<%dA>",curt_cal_point[mvar.cal_point]/1000);
-    oled_show_string(76, 10, S, FontSize_8x16);
-    
-    oled_show_text(20, 30, "current");
-    oled_show_string(60, 30, current_str(mvar.msr.mA), FontSize_8x16);
-
-    float cal=mvar.cal.curt[mvar.cal_point].val;
-    if(cal>1.0){
-        snprintf(S,sizeof(S),"+%f",cal-1.0);
-    }else{
-        snprintf(S,sizeof(S),"-%f",1.0-cal);
-    }
-    oled_show_string(40, 50, S, FontSize_6x8);
-}
-
-void zero_cal(void)
-{
-    char S[32]={0};
-    
-    oled_clear();
-
-    oled_show_text(32, 8, "zero_cal");
-    snprintf(S,sizeof(S),"<%d>",mvar.cal.zero);
-    oled_show_string(48, 26, S, FontSize_8x16);
-    oled_show_string(48, 42, current_str(mvar.msr.raw_mA), FontSize_8x16);
-}
-
-
-static struct {
-    char *name;
-    menu_fun fun;
-}menus[]={
-    {"curt_curve",curt_curve_show},
-    {"low_volt",low_volt_set},
-    {"over_curt",over_curt_set},
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-    {"over_temp",over_temp_set},
-    {"range_set",range_set},
-    {"res_set",res_set},
-#endif
-    {"voice_set",voice_set},
-    {"contrast",contrast_set},
-    {"curt_cal",curt_cal},
-    {"volt_cal",volt_cal},
-    {"zero_cal",zero_cal},
-    {"def_set",def_set},
-};
-
-
-void key_fun_volt_cal(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.cal_point>0){
-                mvar.cal_point--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.cal_point<ASIZE(mvar.cal.volt)-1){
-                mvar.cal_point++;
-            }
-            break;
-        case keySetShort:
-            float cal=(float)volt_cal_point[mvar.cal_point]/(float)mvar.msr.raw_mV;
-            if(cal>0.8 && cal<1.2){
-                mvar.cal.volt[mvar.cal_point].raw=mvar.msr.raw_mV;
-                mvar.cal.volt[mvar.cal_point].val=cal;
-            }
-            break;
-        case keySetLong:
-            save_cal();
-            mvar.view=view_show_menu;
-            break;
-        default :
-            break;
-    }
-}
-
-void key_fun_curt_cal(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.cal_point>0){
-                mvar.cal_point--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.cal_point<ASIZE(mvar.cal.curt)-1){
-                mvar.cal_point++;
-            }
-            break;
-        case keySetShort:
-            float cal=(float)curt_cal_point[mvar.cal_point]/(float)mvar.msr.raw_mA;
-            if(cal>0.6 && cal<1.4){
-                mvar.cal.curt[mvar.cal_point].raw=mvar.msr.raw_mA;
-                mvar.cal.curt[mvar.cal_point].val=cal;
-            }
-            break;
-        case keySetLong:
-            save_cal();
-            mvar.view=view_show_menu;
-            break;
-        default :
-            break;
-    }
-}
-
-void key_fun_zero_cal(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.cal.zero>-50){
-                mvar.cal.zero--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.cal.zero<50){
-                mvar.cal.zero++;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            save_cal();
-            mvar.view=view_show_menu;
-            break;
-        default :
-            break;
-    }
-}
-
-
-void key_fun_curt_curve(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.hlist_lv>0){
-                mvar.hlist_lv--;
-            }
-            break;
-        case keyRightShort:
-            if(mvar.hlist_lv<HDATA_LV-1){
-                mvar.hlist_lv++;
-            }
-            break;
-        case keySetShort:
-        case keySetLong:
-            mvar.view=view_show_menu;
-            break;
-        default :
-            break;
-    }
-}
-
-void view_show_menu(void)
-{
-    oled_clear();
-    for(int i=0;i<4;i++){
-        oled_show_text(0, i*16, menus[i+mvar.menuStart].name);
-    }
-    int row=mvar.menuIdx-mvar.menuStart;
-    for(int i=0;i<128;i++){
-        GRAM[row*2][i]=~GRAM[row*2][i];
-        GRAM[row*2+1][i]=~GRAM[row*2+1][i];
-    }
-}
-
-
-void key_fun_menu(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.menuIdx>0){
-                mvar.menuIdx--;
-                if(mvar.menuIdx<mvar.menuStart){
-                    mvar.menuStart=mvar.menuIdx;
-                }
-            }
-            break;
-        case keyRightShort:
-            if(mvar.menuIdx<ASIZE(menus)-1){
-                mvar.menuIdx++;
-                //Printf("mvar.menuIdx:%d\n",mvar.menuIdx);
-                if(mvar.menuIdx>mvar.menuStart+3){
-                    mvar.menuStart=mvar.menuIdx-3;
-                    //Printf("mvar.menuStart:%d\n",mvar.menuStart);
-                }
-            }
-            break;
-        case keySetShort:
-            mvar.seting=0;
-            mvar.set_idx=0;
-            mvar.cal_point=0;
-            mvar.view=menus[mvar.menuIdx].fun;
-            break;
-        case keySetLong:
-            mvar.view=main_views[mvar.store.main];
-            break;
-        default :
-            break;
-    }
-}
-
-
-void key_fun_main(int event)
-{
-    switch(event){
-        case keyLeftShort:
-            if(mvar.store.main<ASIZE(main_views)-1){
-                mvar.store.main++;
-            }else{
-                mvar.store.main=0;
-            }
-            mvar.view=main_views[mvar.store.main];
-            save();
-            break;
-        case keyLeftLong:
-            mvar.msr.mWH=0;
-            save_mWH();
-            break;
-        case keyRightShort:
-            mvar.store.rotate=!mvar.store.rotate;
-            oled_display_rotate(mvar.store.rotate);
-            save();
-            break;
-        case keySetShort:
-            mvar.menuIdx=0;
-            mvar.menuStart=0;
-            mvar.view=view_show_menu;
-            break;
-        default :
-            break;
-    }
-}
-
-
-void key_handler_fun(int event)
-{
-    if(mvar.view==view_show_main || mvar.view==view_show_main2){
-        return key_fun_main(event);
-    }else if(mvar.view==view_show_menu){
-        return key_fun_menu(event);
-    }else if(mvar.view==curt_curve_show){
-        return key_fun_curt_curve(event);
-    }else if(mvar.view==low_volt_set){
-        return key_fun_low_volt(event);
-    }else if(mvar.view==over_curt_set){
-        return key_fun_over_curt(event);
-    }
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-    else if(mvar.view==over_temp_set){
-        return key_fun_over_temp(event);
-    }
-#endif
-    else if(mvar.view==voice_set){
-        return key_fun_voice_set(event);
-    }else if(mvar.view==contrast_set){
-        return key_fun_contrast_set(event);
-    }else if(mvar.view==range_set){
-        return key_fun_range_set(event);
-    }else if(mvar.view==res_set){
-        return key_fun_res_set(event);
-    }else if(mvar.view==volt_cal){
-        return key_fun_volt_cal(event);
-    }else if(mvar.view==curt_cal){
-        return key_fun_curt_cal(event);
-    }else if(mvar.view==zero_cal){
-        return key_fun_zero_cal(event);
-    }
-}
-
-
-void show_timer_fun(unsigned long data)
-{
-    mvar.view();
-    mod_timer(&mvar.show_timer, jiffies+100);
-}
 
 int nvram_set_data(char *name, void *data, int len)
 {
@@ -1210,7 +195,146 @@ void save_mWH(void)
     nvram_set_int("mWH", mvar.msr.mWH);
 }
 
-void app_main(void)
+
+void hist_data_init(void)
+{
+    hist_data_t *data=&mvar.hist;
+
+    data->lv[0].div=50; //50ms
+    data->lv[0].comp=20;
+
+    data->lv[1].div=1000;   //1S
+    data->lv[1].comp=5;
+
+    data->lv[2].div=5000;  //5S
+    data->lv[2].comp=2;
+
+    data->lv[3].div=10000;  //10S
+    data->lv[3].comp=6;
+
+    data->lv[4].div=60000;  //60S
+    data->lv[4].comp=2;
+
+    data->lv[5].div=120000;  //120S
+}
+
+void hist_data_update(int lv, int mA)
+{
+    hist_data_t *data=&mvar.hist;
+    hist_level_t *lv_t=&data->lv[lv];
+    
+    lv_t->list[lv_t->len++]=mA;
+    lv_t->num++;
+    if(lv_t->comp && lv_t->num==lv_t->comp){
+        int sum=0;
+        for(int i=lv_t->len-lv_t->comp;i<lv_t->len;i++){
+            sum+=lv_t->list[i];
+        }
+        sum/=lv_t->comp;
+        lv_t->num=0;
+        hist_data_update(lv+1, sum);
+    }
+    
+    if(lv_t->len==HDATA_SIZE){
+        lv_t->len-=HDATA_DROP;
+        memmove(lv_t->list,lv_t->list+HDATA_DROP,(HDATA_SIZE-HDATA_DROP)*4);
+    }
+}
+
+void key_handler_fun(int event)
+{
+    #ifdef CONFIG_LCD
+    lcd_view_key_handler(event);
+    #else
+    oled_view_key_handler(event);
+    #endif
+}
+
+
+void show_timer_fun(unsigned long data)
+{
+#ifdef CONFIG_LCD
+    lcd_view_main_update();
+#else
+    mvar.view();
+#endif
+    mod_timer(&mvar.show_timer, jiffies+50);
+}
+
+
+char *time_str(void)
+{
+    time_t now;
+    struct tm tm;
+    static char str[16]={0};
+    
+    time(&now);
+    localtime_r(&now, &tm);
+    #ifdef CONFIG_LCD
+    snprintf(str, sizeof(str), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    #else
+    snprintf(str, sizeof(str), "%02d:%02d", tm.tm_min, tm.tm_sec);
+    #endif
+
+    return str;
+}
+
+char *voltage_str(void)
+{
+    static char S[16]={0};
+    snprintf(S,sizeof(S),"%.2fV",(double)mvar.msr.mV/1000);
+    return S;
+}
+
+char *current_str(int mA)
+{
+    static char S[16]={0};
+#ifdef CONFIG_LCD
+    if(mA>=1000){
+        snprintf(S,sizeof(S),"%s%.2fA",mvar.msr.dir==-1?"-":"",(double)mA/1000);
+    } else {
+        snprintf(S,sizeof(S),"%s%dmA",mvar.msr.dir==-1?"-":"",mA);
+    }
+#else
+    if(mA>=1000){
+        snprintf(S,sizeof(S),"%.2fA",(double)mA/1000);
+    } else {
+        snprintf(S,sizeof(S),"%dmA",mA);
+    }
+#endif
+    return S;
+}
+
+char *power_str(void)
+{
+    static char S[16]={0};
+    if(mvar.msr.mW>=100000){
+        snprintf(S,sizeof(S),"%.1fW",(double)mvar.msr.mW/1000);
+    } else if(mvar.msr.mW>=1000){
+        snprintf(S,sizeof(S),"%.2fW",(double)mvar.msr.mW/1000);
+    } else {
+        snprintf(S,sizeof(S),"%dmW",mvar.msr.mW);
+    }
+    return S;
+}
+
+
+char *elec_str(void)
+{
+    static char W[16]={0};
+    if(mvar.msr.mWH>=1000000){
+        snprintf(W,sizeof(W),"%dWH",mvar.msr.mWH/1000);
+    } else if(mvar.msr.mWH>=100000){
+        snprintf(W,sizeof(W),"%.1fWH",(double)mvar.msr.mWH/1000);
+    } else if(mvar.msr.mWH>=1000){
+        snprintf(W,sizeof(W),"%.2fWH",(double)mvar.msr.mWH/1000);
+    } else {
+        snprintf(W,sizeof(W),"%dmWH",mvar.msr.mWH);
+    }
+    return W;
+}
+
+void app_main(void *arg)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -1241,6 +365,9 @@ void app_main(void)
     
     init_timers_cpu();
     key_init();
+#ifdef CONFIG_ESC
+    esc_init();
+#endif
 #ifdef CONFIG_IDF_TARGET_ESP32C3
     temp_init();
 #endif
@@ -1249,12 +376,19 @@ void app_main(void)
     buzzer_set(buzzerShort);
     
     ina226_init();
+#ifdef CONFIG_LCD
+    lcd_init();
+    lvgl_init();
+#else
     oled_init();
+#endif
     hist_data_init();
     
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 	xTaskCreate(ina226_task, "ina226_task", 2048, NULL, 5, NULL);
+    #ifndef CONFIG_LCD
 	xTaskCreate(oled_task, "oled_task", 2048, NULL, 3, NULL);
+    #endif
 #else
     setup_timer(&mvar.ina226_timer, ina226_timer_fun, 0);
     mod_timer(&mvar.ina226_timer, jiffies+50);
@@ -1266,16 +400,24 @@ void app_main(void)
     key_register_fun(keyNumLeft, key_handler_fun);
     key_register_fun(keyNumRight, key_handler_fun);
 
+#ifdef CONFIG_LCD
+    lcd_view_main_init();
+    lcd_view_menu_init();
+    lcd_view_alert_init();
+#else
+    oled_view_init();
+#endif
     setup_timer(&mvar.show_timer, show_timer_fun, 0);
     mod_timer(&mvar.show_timer, jiffies+100);
 
     setup_timer(&mvar.elec_timer, elec_timer_fun, 0);
     mod_timer(&mvar.elec_timer, jiffies+HZ);
     
-    mvar.view=main_views[mvar.store.main];
     while(1){
         run_timers();
+        #ifdef CONFIG_LCD
+        lv_timer_handler();
+        #endif
         vTaskDelay(1);
     }
 }
-

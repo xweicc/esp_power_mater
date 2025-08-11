@@ -36,13 +36,24 @@ void oled_show_chinese(uint8_t x,uint8_t y,uint8_t no)
 
 void oled_show_text(uint8_t x,uint8_t y,char *text)
 {
-    for(int i=0;language[i].en;i++){
-        if(!strcmp(language[i].en,text)){
-            for(int j=0;j<language[i].len;j++){
-                oled_show_chinese(x+j*18, y, language[i].cn[j]);
+    if(mvar.store.lang==languageCN){
+        for(int i=0;language[i].en;i++){
+            if(!strcmp(language[i].en,text)){
+                for(int j=0;j<language[i].len;j++){
+                    oled_show_chinese(x+j*18, y, language[i].cn[j]);
+                }
+                break;
             }
-            break;
         }
+    }else{
+        char buf[64]={0};
+        strncpy(buf,text,sizeof(buf));
+        for(int i=0;i<64 && buf[i];i++){
+            if(buf[i]=='_'){
+                buf[i]=' ';
+            }
+        }
+        oled_show_string(x, y, buf, FontSize_8x16);
     }
 }
 

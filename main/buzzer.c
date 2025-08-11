@@ -8,13 +8,36 @@ void buzzer_set(int state)
         mod_timer(&mvar.buzzer.timer, jiffies+20);
     }else if(state==buzzerLong){
         mod_timer(&mvar.buzzer.timer, jiffies+200);
+    }else if(state==buzzerFlash){
+        mvar.buzzer.state=state;
+        mvar.buzzer.flash=1;
+        mod_timer(&mvar.buzzer.timer, jiffies+100);
     }
 }
 
+void buzzer_stop(void)
+{
+    mvar.buzzer.state=buzzerNone;
+}
+
+
 void buzzer_timer_fun(unsigned long data)
 {
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    if(mvar.buzzer.state==buzzerFlash){
+        if(mvar.buzzer.flash){
+            ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+            ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+            mod_timer(&mvar.buzzer.timer, jiffies+900);
+        }else{
+            ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 12*mvar.store.voice));
+            ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+            mod_timer(&mvar.buzzer.timer, jiffies+100);
+        }
+        mvar.buzzer.flash=!mvar.buzzer.flash;
+    }else{
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    }
 }
 
 void buzzer_init(void)
@@ -35,7 +58,11 @@ void buzzer_init(void)
         .channel        = LEDC_CHANNEL_0,
         .timer_sel      = LEDC_TIMER_0,
         .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = 2,
+        #ifdef CONFIG_LCD
+        .gpio_num       = GPIO_NUM_0,
+        #else
+        .gpio_num       = GPIO_NUM_2,
+        #endif
         .duty           = 0, // Set duty to 0%
         .hpoint         = 0
     };
