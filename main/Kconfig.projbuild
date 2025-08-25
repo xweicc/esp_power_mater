@@ -12,4 +12,8 @@ menu "Example Configuration"
         bool "Use 1.47inch LCD"
         default n
 
+    config 80V
+        bool "Voltage 80V"
+        default n
+
 endmenu

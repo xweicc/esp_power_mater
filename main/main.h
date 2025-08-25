@@ -34,7 +34,11 @@
 #include "timer.h"
 #include "buzzer.h"
 #include "key.h"
+#ifdef CONFIG_80V
+#include "ina238.h"
+#else
 #include "ina226.h"
+#endif
 
 #ifdef CONFIG_ESC
 #include "esc.h"
@@ -165,7 +169,7 @@ typedef struct {
     struct timer_list key_timer;
     struct timer_list show_timer;
     struct timer_list elec_timer;
-    struct timer_list ina226_timer;
+    struct timer_list ina_timer;
     struct timer_list oled_timer;
 } meter_var_t;
 

@@ -1,18 +1,7 @@
 #include "main.h"
 
-const static struct {
-    int shuntResistor;  //分流电阻，mΩ
-    int currentLSB;     //电流分辨率，uA
-    int calRegister;    //校准寄存器值
-    int currentMAX;     //电流最大值，A
-} CalTab[] = {
-    {1,4000,1280, 128},
-    {1,2000,2560, 64},
-    {1,1000,5120, 32},
-    {2,4000,640,  128},
-    {2,2000,1280, 64},
-    {2,1000,2560, 32},
-};
+#define CurrentLSB 2    //电流分辨率，mA
+#define CurrentCal 1638 //校准寄存器值
 
 void i2c_init(void)
 {
@@ -35,11 +24,11 @@ void i2c_init(void)
     ESP_ERROR_CHECK(i2c_driver_install(0, conf.mode, 0, 0, 0));
 }
 
-static esp_err_t ina226_register_read(uint8_t reg_addr, uint16_t *data)
+static esp_err_t ina238_register_read(uint8_t reg_addr, uint16_t *data)
 {
     uint8_t buf[2] = {0};
     
-    esp_err_t ret = i2c_master_write_read_device(0, INA226_ADDR, &reg_addr, 1, buf, 2, 10);
+    esp_err_t ret = i2c_master_write_read_device(0, INA238_ADDR, &reg_addr, 1, buf, 2, 10);
     if (ret != ESP_OK) {
         Printf("read %02X failed\n",reg_addr);
         return ret;
@@ -50,11 +39,11 @@ static esp_err_t ina226_register_read(uint8_t reg_addr, uint16_t *data)
     return ESP_OK;
 }
 
-static esp_err_t ina226_register_write(uint8_t reg_addr, uint16_t data)
+static esp_err_t ina238_register_write(uint8_t reg_addr, uint16_t data)
 {
     uint8_t write_buf[3] = {reg_addr, data>>8, data&0xFF};
 
-    esp_err_t ret = i2c_master_write_to_device(0, INA226_ADDR, write_buf, sizeof(write_buf), 10);
+    esp_err_t ret = i2c_master_write_to_device(0, INA238_ADDR, write_buf, sizeof(write_buf), 10);
     if (ret != ESP_OK) {
         Printf("write %02X failed\n",reg_addr);
         return ret;
@@ -65,18 +54,19 @@ static esp_err_t ina226_register_write(uint8_t reg_addr, uint16_t data)
 
 
 //获取电压，mV
-int ina226_get_voltage(void)
+int ina238_get_voltage(void)
 {
     uint16_t data = 0;
-    ina226_register_read(INA226_REG_BV, &data);
-    return data * 125 / 100;
+    ina238_register_read(INA238_REG_VBUS, &data);
+    return (int)((float)data * 3.125);
 }
 
 //获取电流，mA
-int ina226_get_current(int *dir)
+int ina238_get_current(int *dir)
 {
     int16_t data = 0;
-    ina226_register_read(INA226_REG_CUR, (uint16_t*)&data);
+    ina238_register_read(INA238_REG_CURRENT, (uint16_t*)&data);
+    //Printf("data:%d\n",data);
     if(data<=2 && data>=-2){
         data=0;
     }
@@ -89,59 +79,41 @@ int ina226_get_current(int *dir)
     }else{
         *dir=0;
     }
-    return data * CalTab[mvar.cal_idx].currentLSB / 1000;
+    return data * CurrentLSB;
 }
 
 //获取功率，mW
-int ina226_get_power(void)
+int ina238_get_power(void)
 {
     uint16_t data = 0;
-    ina226_register_read(INA226_REG_PWR, &data);
-    return data * CalTab[mvar.cal_idx].currentLSB * 25 / 1000;
-    return 0;
+    ina238_register_read(INA238_REG_PWR, &data);
+    return (int)((float)data * CurrentLSB *0.2);
 }
 
 
 //获取ID
-int ina226_get_id(void)
+int ina238_get_id(void)
 {
     uint16_t id = 0;
     
-    ina226_register_read(INA226_REG_ID, &id);
+    ina238_register_read(INA238_REG_ID, &id);
     Printf("id:%04X\n",id);
     
     return id;
 }
 
-//设置校准值
-int ina226_set_cal(void)
-{
-    uint16_t data;
-    
-    for (int i=0;i<ASIZE(CalTab);i++){
-        if (CalTab[i].shuntResistor == mvar.store.res
-            && CalTab[i].currentMAX == mvar.store.range) {
-            data = (uint16_t)CalTab[i].calRegister;
-            mvar.cal_idx = i;
-            ina226_register_write(INA226_REG_CAL, data);
-            break;
-        }
-    }
-    return 0;
-}
-
-
-int ina226_init(void)
+int ina238_init(void)
 {
     i2c_init();
 
-    if (ina226_get_id() != INA226_ID_NUM) {
-        Printf("Not find ina226\n");
+    if (ina238_get_id() != INA238_ID_NUM) {
+        Printf("Not find ina238\n");
         return -1;
     }
 
-    ina226_register_write(INA226_REG_CONF, 0x456F); //AGV:16*CT:1.1ms
-    ina226_set_cal();
+    ina238_register_write(INA238_REG_CONF, 0x8000); //reset
+    ina238_register_write(INA238_REG_ADC, 0xFFFA); //AVG 16
+    ina238_register_write(INA238_REG_CAL, CurrentCal);
 
     return 0;
 }
@@ -217,10 +189,10 @@ int get_cal_curt(int mA)
     }
 }
 
-void ina226_run(void)
+void ina238_run(void)
 {
-    int v=ina226_get_voltage();
-    int a=ina226_get_current(&mvar.msr.dir);
+    int v=ina238_get_voltage();
+    int a=ina238_get_current(&mvar.msr.dir);
     mvar.msr.raw_mV=v;
     mvar.msr.raw_mA=a;
     mvar.msr.mV=get_cal_volt(v);
@@ -237,17 +209,17 @@ void ina226_run(void)
     #endif
 }
 
-void ina226_timer_fun(unsigned long data)
+void ina238_timer_fun(unsigned long data)
 {
-    ina226_run();
+    ina238_run();
     mod_timer(&mvar.ina_timer, jiffies+50);
 }
 
 
-void ina226_task(void *param)
+void ina238_task(void *param)
 {
     while (1) {
-        ina226_run();
+        ina238_run();
         vTaskDelay(50);
     }
 }

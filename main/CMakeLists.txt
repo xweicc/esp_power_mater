@@ -1,4 +1,10 @@
-set(SRC_FILES "main.c" "buzzer.c" "ina226.c" "key.c" "timer.c")
+set(SRC_FILES "main.c" "buzzer.c" "key.c" "timer.c")
+
+if(CONFIG_80V)
+	list(APPEND SRC_FILES "ina238.c")
+else()
+	list(APPEND SRC_FILES "ina226.c")
+endif()
 
 if(CONFIG_ESC)
 	list(APPEND SRC_FILES "esc.c")

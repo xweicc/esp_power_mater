@@ -28,7 +28,6 @@ store_t defaults={
     .contrast=contrastMid,
 #endif
 #ifdef CONFIG_ESC
-#error 111111
     .hz=1000,
 #endif
 };
@@ -374,8 +373,12 @@ void app_main(void *arg)
 
     buzzer_init();
     buzzer_set(buzzerShort);
-    
+
+#ifdef CONFIG_80V
+    ina238_init();
+#else
     ina226_init();
+#endif
 #ifdef CONFIG_LCD
     lcd_init();
     lvgl_init();
@@ -385,13 +388,19 @@ void app_main(void *arg)
     hist_data_init();
     
 #ifdef CONFIG_IDF_TARGET_ESP32C3
-	xTaskCreate(ina226_task, "ina226_task", 2048, NULL, 5, NULL);
+	xTaskCreate(
+	    #ifdef CONFIG_80V
+        ina238_task, "ina238_task"
+        #else
+	    ina226_task, "ina226_task"
+	    #endif
+	    , 2048, NULL, 5, NULL);
     #ifndef CONFIG_LCD
 	xTaskCreate(oled_task, "oled_task", 2048, NULL, 3, NULL);
     #endif
 #else
-    setup_timer(&mvar.ina226_timer, ina226_timer_fun, 0);
-    mod_timer(&mvar.ina226_timer, jiffies+50);
+    setup_timer(&mvar.ina_timer, ina226_timer_fun, 0);
+    mod_timer(&mvar.ina_timer, jiffies+50);
     setup_timer(&mvar.oled_timer, oled_timer_fun, 0);
     mod_timer(&mvar.oled_timer, jiffies+50);
 #endif
